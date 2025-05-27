@@ -1,0 +1,83 @@
+from django.db import models
+from django.contrib.auth.models import AbstractUser
+
+
+class User(AbstractUser):
+    phone = models.CharField(max_length=15, blank=True, null=True,unique=True)
+    is_driver = models.BooleanField(default=False)
+
+
+class DriverProfile(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='driver_profile')
+    license_number = models.CharField(max_length=20, unique=True)
+    national_id_number = models.CharField(max_length=20, unique=True)
+    license_upload = models.FileField(upload_to='kyc/licenses/', blank=True, null=True)
+    national_id_upload = models.FileField(upload_to='kyc/national_ids/', blank=True, null=True)
+    verification_status = models.CharField(max_length=20, choices=[('pending', 'Pending'), ('verified', 'Verified'), ('rejected', 'Rejected')], default='pending')
+
+    def __str__(self):
+        return f"{self.user.username} - {self.verification_status}"
+
+
+class Vehicle(models.Model):
+    driver = models.ForeignKey(DriverProfile, on_delete=models.CASCADE, related_name='vehicles')
+    vehicle_number = models.CharField(max_length=20, unique=True)
+    vehicle_type = models.CharField(max_length=20, choices=[('car', 'Car'), ('bike', 'Bike'), ('truck', 'Truck')])
+    vehicle_model = models.CharField(max_length=50)
+    vehicle_make = models.CharField(max_length=50)
+    vehicle_color = models.CharField(max_length=20)
+    vehicle_registration_upload = models.FileField(upload_to='vehicles/registration/', blank=True, null=True)
+    insurance_upload = models.FileField(upload_to='vehicles/insurance/', blank=True, null=True)
+
+    def __str__(self):
+        return f"{self.vehicle_make} {self.vehicle_model} ({self.vehicle_number}) - {self.driver.user.username}"
+
+
+class Trip(models.Model):
+    driver = models.ForeignKey(DriverProfile, on_delete=models.CASCADE, related_name='trips')
+    destination = models.CharField(max_length=255)
+    start_location = models.CharField(max_length=255)
+    Vehicle = models.ForeignKey(Vehicle, on_delete=models.CASCADE, related_name='trips')
+    start_time = models.DateTimeField(auto_now_add=True)
+    estimated_end_time = models.DateTimeField()
+    available_seats = models.IntegerField(default=1)
+    price_per_seat = models.DecimalField(max_digits=10, decimal_places=2)
+
+    def __str__(self):
+        return f"Trip {self.id} by {self.driver.user.username} to {self.destination}"
+
+
+class Booking(models.Model):
+    trip = models.ForeignKey(Trip, on_delete=models.CASCADE, related_name='bookings')
+    passenger = models.ForeignKey(User, on_delete=models.CASCADE, related_name='bookings')
+    booking_time = models.DateTimeField(auto_now_add=True)
+    number_of_seats = models.IntegerField(default=1)
+    total_price = models.DecimalField(max_digits=10, decimal_places=2)
+    status = models.CharField(max_length=20, choices=[('pending', 'Pending'), ('confirmed', 'Confirmed'), ('cancelled', 'Cancelled')], default='pending')
+
+    def __str__(self):
+        return f"Booking {self.id} for {self.passenger.username} on trip {self.trip.id}"
+
+
+class ChatThread(models.Model):
+    trip = models.ForeignKey(Trip, on_delete=models.CASCADE, related_name='chat_threads')
+    passenger = models.ForeignKey(User, on_delete=models.CASCADE, related_name='chat_threads')
+    driver = models.ForeignKey(DriverProfile, on_delete=models.CASCADE, related_name='chat_threads')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        unique_together = ('trip', 'passenger', 'driver')
+
+
+class ChatMessage(models.Model):
+    thread = models.ForeignKey(ChatThread, on_delete=models.CASCADE, related_name='messages')
+    sender = models.ForeignKey(User, on_delete=models.CASCADE, related_name='sent_messages')
+    message = models.TextField()
+    timestamp = models.DateTimeField(auto_now_add=True)
+    is_read = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ['timestamp']
+        verbose_name_plural = 'Chat Messages'

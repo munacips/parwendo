@@ -1,0 +1,19 @@
+from . import views
+from django.urls import path
+
+urlpatterns = [
+    path('trips/',views.trips, name='trips'),
+    path('trips/<int:id>/', views.trip_details, name='trip_details'),
+    path('vehicles/', views.vehicles, name='vehicles'),
+    path('vehicles/<int:id>/', views.vehicle_details, name='vehicle_details'),
+    path('bookings/', views.bookings, name='bookings'),
+    path('bookings/<int:id>/', views.booking_details, name='booking_details'),
+    path('drivers/', views.driver_profiles, name='drivers'),
+    path('drivers/<int:id>/', views.driver_profile_details, name='driver_details'),
+    path('chat/threads/', views.chat_threads, name='chat_threads'),
+    path('chat/threads/<int:id>/', views.chat_thread_details, name='chat_thread_details'),
+    path('chat/messages/', views.chat_messages, name='chat_messages'),
+    path('chat/messages/<int:id>/', views.chat_message_details, name='chat_message_details'),
+    path('users/', views.users, name='users'),
+    path('users/<int:id>/', views.user_details, name='user_details'),
+]
