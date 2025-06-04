@@ -2,6 +2,7 @@ from . import views
 from django.urls import path
 
 urlpatterns = [
+    path('get_token_from_oauth/', views.get_token_from_oauth, name='get_token_from_oauth'),
     path('trips/',views.trips, name='trips'),
     path('trips/<int:id>/', views.trip_details, name='trip_details'),
     path('vehicles/', views.vehicles, name='vehicles'),
