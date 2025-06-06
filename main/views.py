@@ -1,10 +1,11 @@
+from django.db.models import Count, Sum, Q
 from django.shortcuts import get_object_or_404
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework import status
 from .models import User, DriverProfile, Vehicle, Trip, Booking, ChatThread, ChatMessage
-from .serializers import UserSerializer, TripCreateSerializer, BookingCreateSerializer, DriverProfileSerializer, VehicleSerializer, TripSerializer, BookingSerializer, ChatThreadSerializer, ChatMessageSerializer
+from .serializers import UserStatisticsSerializer, UserSerializer, TripCreateSerializer, BookingCreateSerializer, CreateDriverProfileSerializer, DriverProfileSerializer, VehicleSerializer, TripSerializer, BookingSerializer, ChatThreadSerializer, ChatMessageSerializer
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
 import django_filters
@@ -14,8 +15,8 @@ import os
 from dotenv import load_dotenv
 from pathlib import Path
 from django.views.decorators.csrf import csrf_exempt
-import math
-import django
+from django.db.models import Q, Sum, Count
+from decimal import Decimal
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(os.path.join(BASE_DIR, '.env'))
@@ -36,7 +37,7 @@ class TripFilter(django_filters.FilterSet):
         model = Trip
         fields = ['driver', 'destination', 'start_location',
                   'near_x', 'near_y', 'radius_km', 'available']
-        
+
     def filter_by_date(self, queryset, name, value):
         """Filter trips by date, ignoring time"""
         if value:
@@ -81,23 +82,25 @@ class TripFilter(django_filters.FilterSet):
         if value is True:
             # Get trips that have available seats (not fully booked)
             from django.db.models import Count, F
-            
+
             # Annotate queryset with booking count and filter where bookings < available_seats
             return queryset.annotate(
-                booking_count=Count('booking', filter=models.Q(booking__status__in=['confirmed', 'pending']))
+                booking_count=Count('booking', filter=models.Q(
+                    booking__status__in=['confirmed', 'pending']))
             ).filter(
                 booking_count__lt=F('available_seats')
             )
         elif value is False:
             # Get trips that are fully booked
             from django.db.models import Count, F
-            
+
             return queryset.annotate(
-                booking_count=Count('booking', filter=models.Q(booking__status__in=['confirmed', 'pending']))
+                booking_count=Count('booking', filter=models.Q(
+                    booking__status__in=['confirmed', 'pending']))
             ).filter(
                 booking_count__gte=F('available_seats')
             )
-        
+
         # If value is None or not specified, return all trips
         return queryset
 
@@ -122,8 +125,9 @@ class DriverProfileFilter(django_filters.FilterSet):
 
 
 class BookingFilter(django_filters.FilterSet):
-    user = django_filters.NumberFilter(field_name='passenger__id', lookup_expr='exact')
-    
+    user = django_filters.NumberFilter(
+        field_name='passenger__id', lookup_expr='exact')
+
     class Meta:
         model = Booking
         fields = ['trip', 'passenger', 'status', 'user']
@@ -167,7 +171,8 @@ def create_object(request, serializer_class, extra_fields=None):
     data = request.data.copy()
     if extra_fields:
         data.update(extra_fields)
-    serializer = serializer_class(data=data, context={'request': request})  # Add context
+    serializer = serializer_class(
+        data=data, context={'request': request})  # Add context
     if serializer.is_valid():
         serializer.save()
         return Response(serializer.data, status=status.HTTP_201_CREATED)
@@ -239,6 +244,7 @@ def trips(request):
         return apply_filter_and_respond(Trip, TripFilter, TripSerializer, request)
     return create_object(request, TripCreateSerializer, {'driver': request.user.id})
 
+
 @csrf_exempt
 @api_view(['GET', 'PATCH', 'DELETE'])
 @permission_classes([IsAuthenticated])
@@ -291,12 +297,70 @@ def user_details(request, id):
 
 
 @csrf_exempt
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def users_statistics(request, id):
+    user = User.objects.get(id=id)
+    
+    # Booking statistics for the user as a passenger
+    booking_stats = Booking.objects.filter(passenger=user).aggregate(
+        total_bookings=Count('id'),
+        confirmed_bookings=Count('id', filter=Q(status='confirmed')),
+        pending_bookings=Count('id', filter=Q(status='pending')),
+        cancelled_bookings=Count('id', filter=Q(status='cancelled')),
+        total_amount_spent=Sum('total_price', filter=Q(status='confirmed')) or Decimal('0.00')
+    )
+    
+    # Trip statistics for the user as a driver (if they are a driver)
+    trip_stats = {}
+    if hasattr(user, 'driverprofile'):
+        trip_stats = Trip.objects.filter(driver=user).aggregate(
+            total_trips=Count('id'),
+            completed_trips=Count('id', filter=Q(status='completed'))
+        )
+        
+        # Calculate total amount earned from confirmed bookings on user's trips
+        earned_amount = Booking.objects.filter(
+            trip__driver=user,
+            status='confirmed'
+        ).aggregate(
+            total_earned=Sum('total_price')
+        )['total_earned'] or Decimal('0.00')
+        
+        trip_stats['total_amount_earned'] = earned_amount
+    else:
+        trip_stats = {
+            'total_trips': 0,
+            'completed_trips': 0,
+            'total_amount_earned': Decimal('0.00')
+        }
+    
+    # Combine all statistics
+    statistics_data = {
+        'total_bookings': booking_stats['total_bookings'],
+        'confirmed_bookings': booking_stats['confirmed_bookings'],
+        'pending_bookings': booking_stats['pending_bookings'],
+        'cancelled_bookings': booking_stats['cancelled_bookings'],
+        'total_trips': trip_stats['total_trips'],
+        'completed_trips': trip_stats['completed_trips'],
+        'total_amount_spent': booking_stats['total_amount_spent'],
+        'total_amount_earned': trip_stats['total_amount_earned']
+    }
+    
+    serializer = UserStatisticsSerializer(statistics_data)
+    return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+@csrf_exempt
 @api_view(['GET', 'POST'])
 @permission_classes([IsAuthenticated])
 def driver_profiles(request):
     if request.method == 'GET':
         return apply_filter_and_respond(DriverProfile, DriverProfileFilter, DriverProfileSerializer, request)
-    return create_object(request, DriverProfileSerializer, {'user': request.user.id})
+    user = User.objects.get(id=request.user.id)
+    user.is_driver = True
+    user.save()
+    return create_object(request, CreateDriverProfileSerializer, {'user': request.user.id})
 
 
 @csrf_exempt

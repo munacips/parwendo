@@ -36,6 +36,10 @@ class Vehicle(models.Model):
         upload_to='vehicles/registration/', blank=True, null=True)
     insurance_upload = models.FileField(
         upload_to='vehicles/insurance/', blank=True, null=True)
+    vehicle_year = models.IntegerField()
+    vehicle_capacity = models.IntegerField(default=1)
+    vehicle_description = models.TextField(blank=True, null=True)
+
 
     def __str__(self):
         return f"{self.vehicle_make} {self.vehicle_model} ({self.vehicle_number}) - {self.driver.user.username}"

@@ -16,6 +16,20 @@ class DriverProfileSerializer(serializers.ModelSerializer):
         model = DriverProfile
         fields = ['id', 'user', 'license_number', 'national_id_number',
                   'license_upload', 'national_id_upload', 'verification_status']
+        
+
+class CreateDriverProfileSerializer(serializers.ModelSerializer):
+    user = serializers.PrimaryKeyRelatedField(read_only=True)
+
+    class Meta:
+        model = DriverProfile
+        fields = ['user', 'license_number', 'national_id_number',
+                  'license_upload', 'national_id_upload']
+
+    def create(self, validated_data):
+        # Ensure the user is set to the current user from context
+        validated_data['user'] = self.context['request'].user
+        return super().create(validated_data)
 
 
 class VehicleSerializer(serializers.ModelSerializer):
@@ -24,7 +38,20 @@ class VehicleSerializer(serializers.ModelSerializer):
     class Meta:
         model = Vehicle
         fields = ['id', 'driver', 'vehicle_number', 'vehicle_type', 'vehicle_make',
-                  'vehicle_model', 'vehicle_color', ]
+                  'vehicle_model', 'vehicle_color', 'vehicle_year', 'vehicle_capacity', 'vehicle_description']
+        
+
+class CreateVehicleSerializer(serializers.ModelSerializer):
+    driver = serializers.PrimaryKeyRelatedField(read_only=True)
+
+    class Meta:
+        model = Vehicle
+        fields = ['driver', 'vehicle_number', 'vehicle_type', 'vehicle_make',
+                  'vehicle_model', 'vehicle_color', 'vehicle_year', 'vehicle_capacity', 'vehicle_description', 'vehicle_registration_upload', 'insurance_upload']
+
+    def create(self, validated_data):
+        validated_data['driver'] = self.context['request'].user.driver_profile
+        return super().create(validated_data)
 
 
 class TripSerializer(serializers.ModelSerializer):
@@ -95,3 +122,13 @@ class ChatMessageSerializer(serializers.ModelSerializer):
         model = ChatMessage
         fields = ['id', 'thread', 'sender', 'content', 'timestamp']
         read_only_fields = ['timestamp']
+
+class UserStatisticsSerializer(serializers.Serializer):
+    total_bookings = serializers.IntegerField()
+    confirmed_bookings = serializers.IntegerField()
+    pending_bookings = serializers.IntegerField()
+    cancelled_bookings = serializers.IntegerField()
+    total_trips = serializers.IntegerField()
+    completed_trips = serializers.IntegerField()
+    total_amount_spent = serializers.DecimalField(max_digits=10, decimal_places=2)
+    total_amount_earned = serializers.DecimalField(max_digits=10, decimal_places=2)
