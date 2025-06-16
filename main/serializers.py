@@ -6,7 +6,7 @@ class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ['id', 'username', 'email', 'first_name',
-                  'last_name', 'phone', 'is_driver']
+                  'last_name', 'phone', 'is_driver','profile_picture']
 
 
 class DriverProfileSerializer(serializers.ModelSerializer):
@@ -93,6 +93,7 @@ class BookingSerializer(serializers.ModelSerializer):
         fields = ['id', 'trip', 'passenger', 'booking_time',
                   'number_of_seats', 'total_price', 'status']
 
+
 class BookingCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Booking
@@ -102,6 +103,7 @@ class BookingCreateSerializer(serializers.ModelSerializer):
         # Set the passenger to the current user from context
         validated_data['passenger'] = self.context['request'].user
         return super().create(validated_data)
+
 
 class ChatThreadSerializer(serializers.ModelSerializer):
     trip = TripSerializer()
@@ -114,14 +116,32 @@ class ChatThreadSerializer(serializers.ModelSerializer):
                   'created_at', 'updated_at', 'is_active']
 
 
+class CreateThreadSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ChatThread
+        fields = ['id','trip', 'passenger', 'driver']
+
+
 class ChatMessageSerializer(serializers.ModelSerializer):
     thread = ChatThreadSerializer()
     sender = UserSerializer()
 
     class Meta:
         model = ChatMessage
-        fields = ['id', 'thread', 'sender', 'content', 'timestamp']
+        fields = ['id', 'thread', 'sender', 'message', 'timestamp']
         read_only_fields = ['timestamp']
+
+
+class ChatCreateMessageSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ChatMessage
+        fields = ['thread', 'sender', 'message']
+
+    def create(self, validated_data):
+        # Set the sender to the current user from context
+        validated_data['sender'] = self.context['request'].user
+        return super().create(validated_data)
+
 
 class UserStatisticsSerializer(serializers.Serializer):
     total_bookings = serializers.IntegerField()

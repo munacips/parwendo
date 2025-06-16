@@ -5,7 +5,7 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework import status
 from .models import User, DriverProfile, Vehicle, Trip, Booking, ChatThread, ChatMessage
-from .serializers import UserStatisticsSerializer, UserSerializer, TripCreateSerializer, BookingCreateSerializer, CreateDriverProfileSerializer, DriverProfileSerializer, VehicleSerializer, TripSerializer, BookingSerializer, ChatThreadSerializer, ChatMessageSerializer
+from .serializers import ChatCreateMessageSerializer, CreateThreadSerializer, UserStatisticsSerializer, CreateVehicleSerializer, UserSerializer, TripCreateSerializer, BookingCreateSerializer, CreateDriverProfileSerializer, DriverProfileSerializer, VehicleSerializer, TripSerializer, BookingSerializer, ChatThreadSerializer, ChatMessageSerializer
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
 import django_filters
@@ -85,7 +85,7 @@ class TripFilter(django_filters.FilterSet):
 
             # Annotate queryset with booking count and filter where bookings < available_seats
             return queryset.annotate(
-                booking_count=Count('booking', filter=models.Q(
+                booking_count=Count('booking', filter=Q(
                     booking__status__in=['confirmed', 'pending']))
             ).filter(
                 booking_count__lt=F('available_seats')
@@ -95,7 +95,7 @@ class TripFilter(django_filters.FilterSet):
             from django.db.models import Count, F
 
             return queryset.annotate(
-                booking_count=Count('booking', filter=models.Q(
+                booking_count=Count('booking', filter=Q(
                     booking__status__in=['confirmed', 'pending']))
             ).filter(
                 booking_count__gte=F('available_seats')
@@ -134,12 +134,29 @@ class BookingFilter(django_filters.FilterSet):
 
 
 class ChatThreadFilter(django_filters.FilterSet):
+    booking = django_filters.NumberFilter(method='filter_by_booking')
+
     class Meta:
         model = ChatThread
-        fields = ['trip', 'passenger', 'driver']
+        fields = ['trip', 'passenger', 'driver', 'booking']
+
+    def filter_by_booking(self, queryset, name, value):
+        """Filter chat threads by booking ID."""
+        if value:
+            trip = Booking.objects.filter(id=value).values_list('trip', flat=True).first()
+            passenger = Booking.objects.filter(id=value).values_list('passenger', flat=True).first()
+            driver = Booking.objects.filter(id=value).values_list('trip__driver', flat=True).first()
+            return queryset.filter(
+                Q(trip__id=trip),
+                Q(passenger__id=passenger),
+                Q(driver__id=driver)
+            )
 
 
 class ChatMessageFilter(django_filters.FilterSet):
+    thread = django_filters.NumberFilter(
+        field_name='thread__id', lookup_expr='exact')
+
     class Meta:
         model = ChatMessage
         fields = ['thread', 'sender']
@@ -262,7 +279,7 @@ def trip_details(request, id):
 def vehicles(request):
     if request.method == 'GET':
         return apply_filter_and_respond(Vehicle, VehicleFilter, VehicleSerializer, request)
-    return create_object(request, VehicleSerializer, {'driver': request.user.id})
+    return create_object(request, CreateVehicleSerializer, {'driver': request.user.id})
 
 
 @csrf_exempt
@@ -301,16 +318,17 @@ def user_details(request, id):
 @permission_classes([IsAuthenticated])
 def users_statistics(request, id):
     user = User.objects.get(id=id)
-    
+
     # Booking statistics for the user as a passenger
     booking_stats = Booking.objects.filter(passenger=user).aggregate(
         total_bookings=Count('id'),
         confirmed_bookings=Count('id', filter=Q(status='confirmed')),
         pending_bookings=Count('id', filter=Q(status='pending')),
         cancelled_bookings=Count('id', filter=Q(status='cancelled')),
-        total_amount_spent=Sum('total_price', filter=Q(status='confirmed')) or Decimal('0.00')
+        total_amount_spent=Sum('total_price', filter=Q(
+            status='confirmed')) or Decimal('0.00')
     )
-    
+
     # Trip statistics for the user as a driver (if they are a driver)
     trip_stats = {}
     if hasattr(user, 'driverprofile'):
@@ -318,7 +336,7 @@ def users_statistics(request, id):
             total_trips=Count('id'),
             completed_trips=Count('id', filter=Q(status='completed'))
         )
-        
+
         # Calculate total amount earned from confirmed bookings on user's trips
         earned_amount = Booking.objects.filter(
             trip__driver=user,
@@ -326,7 +344,7 @@ def users_statistics(request, id):
         ).aggregate(
             total_earned=Sum('total_price')
         )['total_earned'] or Decimal('0.00')
-        
+
         trip_stats['total_amount_earned'] = earned_amount
     else:
         trip_stats = {
@@ -334,7 +352,7 @@ def users_statistics(request, id):
             'completed_trips': 0,
             'total_amount_earned': Decimal('0.00')
         }
-    
+
     # Combine all statistics
     statistics_data = {
         'total_bookings': booking_stats['total_bookings'],
@@ -346,7 +364,7 @@ def users_statistics(request, id):
         'total_amount_spent': booking_stats['total_amount_spent'],
         'total_amount_earned': trip_stats['total_amount_earned']
     }
-    
+
     serializer = UserStatisticsSerializer(statistics_data)
     return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -400,7 +418,7 @@ def booking_details(request, id):
 def chat_threads(request):
     if request.method == 'GET':
         return apply_filter_and_respond(ChatThread, ChatThreadFilter, ChatThreadSerializer, request)
-    return create_object(request, ChatThreadSerializer)
+    return create_object(request, CreateThreadSerializer)
 
 
 @csrf_exempt
@@ -420,7 +438,7 @@ def chat_thread_details(request, id):
 def chat_messages(request):
     if request.method == 'GET':
         return apply_filter_and_respond(ChatMessage, ChatMessageFilter, ChatMessageSerializer, request)
-    return create_object(request, ChatMessageSerializer, {'sender': request.user.id})
+    return create_object(request, ChatCreateMessageSerializer)
 
 
 @csrf_exempt

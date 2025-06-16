@@ -4,6 +4,7 @@ from django.contrib.auth.models import AbstractUser
 
 class User(AbstractUser):
     phone = models.CharField(max_length=15, blank=True, null=True, unique=True)
+    profile_picture = models.ImageField(upload_to='kyc/profile_pictures/', blank=True, null=True)
     is_driver = models.BooleanField(default=False)
 
 
@@ -39,6 +40,7 @@ class Vehicle(models.Model):
     vehicle_year = models.IntegerField()
     vehicle_capacity = models.IntegerField(default=1)
     vehicle_description = models.TextField(blank=True, null=True)
+    verified = models.BooleanField(default=False)
 
 
     def __str__(self):
