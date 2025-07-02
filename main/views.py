@@ -4,8 +4,8 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework import status
-from .models import User, DriverProfile, Vehicle, Trip, Booking, ChatThread, ChatMessage
-from .serializers import ChatCreateMessageSerializer, CreateThreadSerializer, UserStatisticsSerializer, CreateVehicleSerializer, UserSerializer, TripCreateSerializer, BookingCreateSerializer, CreateDriverProfileSerializer, DriverProfileSerializer, VehicleSerializer, TripSerializer, BookingSerializer, ChatThreadSerializer, ChatMessageSerializer
+from .models import User, DriverProfile, FCMDevice, Vehicle, Trip, Booking, ChatThread, ChatMessage, UserReport, OTP, FCMDevice
+from .serializers import UserReportCreateSerializer, UserReportSerializer, ChatCreateMessageSerializer, CreateThreadSerializer, UserStatisticsSerializer, CreateVehicleSerializer, UserSerializer, TripCreateSerializer, BookingCreateSerializer, CreateDriverProfileSerializer, DriverProfileSerializer, VehicleSerializer, TripSerializer, BookingSerializer, ChatThreadSerializer, ChatMessageSerializer
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
 import django_filters
@@ -17,6 +17,16 @@ from pathlib import Path
 from django.views.decorators.csrf import csrf_exempt
 from django.db.models import Q, Sum, Count
 from decimal import Decimal
+from django.utils import timezone
+from datetime import timedelta
+import random
+from django.core.mail import send_mail
+from django.contrib.auth.hashers import make_password
+from django.http import Http404, FileResponse
+from django.conf import settings
+import firebase_admin
+from firebase_admin import credentials, messaging
+
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(os.path.join(BASE_DIR, '.env'))
@@ -85,24 +95,26 @@ class TripFilter(django_filters.FilterSet):
 
             # Annotate queryset with booking count and filter where bookings < available_seats
             return queryset.annotate(
-                booking_count=Count('booking', filter=Q(
-                    booking__status__in=['confirmed', 'pending']))
+                booking_count=Count('bookings', filter=Q(
+                    bookings__status__in=['confirmed', 'pending']))
             ).filter(
-                booking_count__lt=F('available_seats')
+                booking_count__lt=F('available_seats'),
+                start_time__gt=timezone.now()
             )
         elif value is False:
             # Get trips that are fully booked
             from django.db.models import Count, F
 
             return queryset.annotate(
-                booking_count=Count('booking', filter=Q(
-                    booking__status__in=['confirmed', 'pending']))
+                booking_count=Count('bookings', filter=Q(
+                    bookings__status__in=['confirmed', 'pending']))
             ).filter(
                 booking_count__gte=F('available_seats')
             )
 
         # If value is None or not specified, return all trips
         return queryset
+
 
 
 class VehicleFilter(django_filters.FilterSet):
@@ -143,9 +155,12 @@ class ChatThreadFilter(django_filters.FilterSet):
     def filter_by_booking(self, queryset, name, value):
         """Filter chat threads by booking ID."""
         if value:
-            trip = Booking.objects.filter(id=value).values_list('trip', flat=True).first()
-            passenger = Booking.objects.filter(id=value).values_list('passenger', flat=True).first()
-            driver = Booking.objects.filter(id=value).values_list('trip__driver', flat=True).first()
+            trip = Booking.objects.filter(
+                id=value).values_list('trip', flat=True).first()
+            passenger = Booking.objects.filter(
+                id=value).values_list('passenger', flat=True).first()
+            driver = Booking.objects.filter(id=value).values_list(
+                'trip__driver', flat=True).first()
             return queryset.filter(
                 Q(trip__id=trip),
                 Q(passenger__id=passenger),
@@ -160,6 +175,19 @@ class ChatMessageFilter(django_filters.FilterSet):
     class Meta:
         model = ChatMessage
         fields = ['thread', 'sender']
+
+
+class UserReportFilter(django_filters.FilterSet):
+    user = django_filters.NumberFilter(
+        field_name='user__id', lookup_expr='exact')
+    reported_user = django_filters.NumberFilter(
+        field_name='reported_user__id', lookup_expr='exact')
+    chat_thread = django_filters.NumberFilter(
+        field_name='chat_thread__id', lookup_expr='exact')
+
+    class Meta:
+        model = UserReport
+        fields = ['user', 'reported_user', 'chat_thread']
 
 # ========== UTILS ==========
 
@@ -180,6 +208,64 @@ def get_and_respond(model, pk, serializer_class):
     obj = get_object_or_404(model, id=pk)
     serializer = serializer_class(obj)
     return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+def send_otp_to_user(user, code):
+    email = getattr(user, 'email', None)
+    phone = getattr(user, 'phone_number', None)
+
+    if email:
+        subject = "Your One-Time Password (OTP)"
+        message = f"Your OTP code is: {code}\n\nThis code will expire in 5 minutes."
+        from_email = None
+        recipient_list = [email]
+
+        try:
+            send_mail(subject, message, from_email, recipient_list)
+            print(f"OTP sent to email: {email}")
+        except Exception as e:
+            print(f"Failed to send email OTP to {email}: {e}")
+
+    if phone:
+        # Send OTP via SMS
+        pass
+
+    if not email and not phone:
+        print(
+            f"User {user.username} has no email or phone number to send OTP to.")
+
+
+def generate_otp():
+    return str(random.randint(100000, 999999))
+
+
+def pdf_viewer(request, file_path):
+    file_path = os.path.join(settings.MEDIA_ROOT, file_path)
+    if not os.path.exists(file_path):
+        raise Http404("File does not exist")
+
+    response = FileResponse(open(file_path, 'rb'),
+                            content_type='application/pdf')
+    response["X-Frame-Options"] = "ALLOWALL"
+    return response
+
+
+def send_push_notification(token, title, body, data=None):
+    message = messaging.Message(
+        token=token,
+        notification=messaging.Notification(
+            title=title,
+            body=body
+        ),
+        data=data or {}
+
+    )
+    response = messaging.send(message)
+
+
+cred = credentials.Certificate(
+    os.path.join(BASE_DIR, 'parwendo-c278c-firebase-adminsdk-fbsvc-46354a366f.json'))
+firebase_admin.initialize_app(cred)
 
 # ========== GENERIC CRUD VIEWS ==========
 
@@ -295,11 +381,26 @@ def vehicle_details(request, id):
 
 @csrf_exempt
 @api_view(['GET', 'POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([AllowAny])
 def users(request):
     if request.method == 'GET':
         return apply_filter_and_respond(User, UserFilter, UserSerializer, request)
-    return create_object(request, UserSerializer)
+
+    data = request.data.copy()
+    data['password'] = make_password(data.get('password', ''))
+    serializer = UserSerializer(data=data, context={'request': request})
+    if not serializer.is_valid():
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    user = serializer.save()
+
+    otp_code = generate_otp()
+    otp_expiry = timezone.now() + timedelta(minutes=5)
+    OTP.objects.create(user=user, code=otp_code, expires_at=otp_expiry)
+
+    send_otp_to_user(user, otp_code)
+
+    return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 
 @csrf_exempt
@@ -398,7 +499,31 @@ def driver_profile_details(request, id):
 def bookings(request):
     if request.method == 'GET':
         return apply_filter_and_respond(Booking, BookingFilter, BookingSerializer, request)
-    return create_object(request, BookingCreateSerializer, {'passenger': request.user.id})
+    # return create_object(request, BookingCreateSerializer, {'passenger': request.user.id})
+    data = request.data.copy()
+    data.update({'passenger': request.user.id})
+    serializer = BookingCreateSerializer(
+        data=data, context={'request': request})
+    if serializer.is_valid():
+        serializer.save()
+
+        # Send notification to the driver
+        trip = Trip.objects.get(id=data["trip"])
+        driver = User.objects.get(id=trip.driver)
+        passenger = User.objects.get(id=serializer.data['passenger'])
+
+        fcm_tokens = FCMDevice.objects.filter(
+            user=driver).values_list('token', flat=True)
+        data = {
+            "booking_id": serializer.data['id'],
+            "screen": "booking",
+        }
+        for token in fcm_tokens:
+            send_push_notification(
+                token, "New Booking", "You have recieved a new booking from " + passenger.username, data)
+
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 @csrf_exempt
@@ -408,7 +533,41 @@ def booking_details(request, id):
     if request.method == 'GET':
         return get_and_respond(Booking, id, BookingSerializer)
     elif request.method == 'PATCH':
-        return update_object(request, Booking, id, BookingSerializer)
+        # return update_object(request, Booking, id, BookingSerializer)
+        obj = Booking.objects.get(id=id)  # get_object_or_404(model, id=pk)
+        serializer = BookingSerializer(obj, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+
+
+            def handle_status(status):
+                match status:
+                    case 'confirmed':
+                        for token in fcm_tokens:
+                            send_push_notification(
+                                token, "Booking Accepted", f"Your booking for the trip [{trip.start_location} -> {trip.destination}] has been accepted", data)
+                        return
+                    case 'rejected':
+                        for token in fcm_tokens:
+                            send_push_notification(
+                                token, "Booking Rejected", f"Your booking for the trip [{trip.start_location} -> {trip.destination}] has been rejected", data)
+                        return
+
+            # Send notification to the passenger
+            if 'status' in serializer.data:
+                trip = Trip.objects.get(id=obj.trip)
+                passenger = obj.passenger
+                fcm_tokens = FCMDevice.objects.filter(
+                    user=passenger).values_list('token', flat=True)
+
+                data = {
+                    "booking_id": serializer.data['id'],
+                    "screen": "booking",
+                }
+                handle_status(serializer.data['status'])
+
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     return delete_object(Booking, id)
 
 
@@ -438,7 +597,36 @@ def chat_thread_details(request, id):
 def chat_messages(request):
     if request.method == 'GET':
         return apply_filter_and_respond(ChatMessage, ChatMessageFilter, ChatMessageSerializer, request)
-    return create_object(request, ChatCreateMessageSerializer)
+    # return create_object(request, ChatCreateMessageSerializer)
+    data = request.data.copy()
+    serializer = ChatCreateMessageSerializer(
+        data=data, context={'request': request})
+    if serializer.is_valid():
+        serializer.save()
+        # Send Push Notifiction
+        thread = serializer.data['thread']
+
+        passenger = ChatThread.objects.get(id=thread).passenger
+        driver = ChatThread.objects.get(id=thread).driver
+        if request.user == passenger:
+            user = driver.user
+            other_user = passenger.username
+        else:
+            user = passenger
+            other_user = driver.username
+        fcm_tokens = FCMDevice.objects.filter(
+            user=user).values_list('token', flat=True)
+        data = {
+            "thread_id": serializer.data['thread'],
+            "screen": "chat",
+        }
+        for fcm_token in fcm_tokens:
+            if fcm_token:
+                send_push_notification(
+                    fcm_token, "New Message", other_user + ' : ' + serializer.data['message'], data)
+        print("Notification Sent!")
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 @csrf_exempt
@@ -450,3 +638,84 @@ def chat_message_details(request, id):
     elif request.method == 'PATCH':
         return update_object(request, ChatMessage, id, ChatMessageSerializer)
     return delete_object(ChatMessage, id)
+
+
+@csrf_exempt
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def user_reports(request):
+    if request.method == 'GET':
+        return apply_filter_and_respond(UserReport, UserReportFilter, UserReportSerializer, request)
+    return create_object(request, UserReportCreateSerializer, {'user': request.user.id})
+
+
+@csrf_exempt
+@api_view(['GET', 'PATCH', 'DELETE'])
+@permission_classes([IsAuthenticated])
+def user_report_details(request, id):
+    if request.method == 'GET':
+        return get_and_respond(UserReport, id, UserReportSerializer)
+    elif request.method == 'PATCH':
+        return update_object(request, UserReport, id, UserReportSerializer)
+    return delete_object(UserReport, id)
+
+
+@csrf_exempt
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def verify_otp(request):
+    username = request.data.get("username")
+    code = request.data.get("otp")
+
+    try:
+        print("Username : ", username)
+        print("Code : ", code)
+        user = User.objects.get(username=username)
+        otp = OTP.objects.filter(user=user, code=code).order_by(
+            '-expires_at').first()
+
+        if not otp or otp.is_expired():
+            return Response({"error": "Invalid or expired OTP"}, status=400)
+
+        otp.delete()
+        user.is_verified = True
+        return Response({"message": "OTP verified successfully"}, status=200)
+
+    except User.DoesNotExist:
+        return Response({"error": "User not found"}, status=404)
+
+
+@csrf_exempt
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def resend_otp(request):
+    username = request.data.get("username")
+
+    try:
+        user = User.objects.get(username=username)
+        otp_code = generate_otp()
+        otp_expiry = timezone.now() + timedelta(minutes=5)
+        OTP.objects.create(user=user, code=otp_code, expires_at=otp_expiry)
+
+        # delete any existing OTPs for the user
+        OTP.objects.filter(user=user).exclude(code=otp_code).delete()
+
+        send_otp_to_user(user, otp_code)
+
+        return Response({"message": "OTP resent successfully"}, status=200)
+
+    except User.DoesNotExist:
+        return Response({"error": "User not found"}, status=404)
+
+
+@csrf_exempt
+@api_view(['POST'])
+def register_fcm_token(request):
+    token = request.data.get('token')
+    if token:
+        FCMDevice.objects.update_or_create(
+            user=request.user,
+            defaults={'token': token}
+        )
+        return Response({"message": "FCM token registered successfully"}, status=200)
+    return Response({"error": "Token is required"}, status=400)

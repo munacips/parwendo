@@ -1,0 +1,27 @@
+{% extends "admin/change_form.html" %}
+
+{% block after_related_objects %}
+  <h2>Chat Messages in this Thread</h2>
+  {% if original.chat_thread %}
+    <div style="max-height:300px; overflow:auto; border:1px solid #ccc; padding:10px; margin-bottom:10px;">
+      {% for msg in original.chat_thread.messages.all %}
+        <div style="margin-bottom:5px;">
+          <strong>{{ msg.sender.username }}:</strong> {{ msg.message }}
+          <small style="color:#888;">({{ msg.timestamp|date:"SHORT_DATETIME_FORMAT" }})</small>
+        </div>
+      {% empty %}
+        <p>No messages found in this chat thread.</p>
+      {% endfor %}
+    </div>
+  {% else %}
+    <p><em>No chat thread associated with this report.</em></p>
+  {% endif %}
+{% endblock %}
+
+{% block submit_buttons_bottom %}
+  {{ block.super }}
+  <div class="submit-row">
+    <input type="submit" name="_block_user" class="deletelink" value="Block Reported User" />
+    <input type="submit" name="_go_to_next" class="default" value="Go to next pending report" />
+  </div>
+{% endblock %}

@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Booking, ChatMessage, ChatThread, DriverProfile, Trip, User, Vehicle
+from .models import Booking, ChatMessage, ChatThread, DriverProfile, Trip, User, Vehicle, UserReport
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -152,3 +152,24 @@ class UserStatisticsSerializer(serializers.Serializer):
     completed_trips = serializers.IntegerField()
     total_amount_spent = serializers.DecimalField(max_digits=10, decimal_places=2)
     total_amount_earned = serializers.DecimalField(max_digits=10, decimal_places=2)
+
+
+class UserReportSerializer(serializers.ModelSerializer):
+    user = UserSerializer()
+
+    class Meta:
+        model = UserReport
+        fields = ['id', 'user','reason', 'reported_user','created_at', 'is_resolved','chat_thread']
+
+
+class UserReportCreateSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = UserReport
+        fields = ['user', 'reason', 'reported_user', 'chat_thread']
+
+    def create(self, validated_data):
+        # Set the user to the current user from context
+        validated_data['user'] = self.context['request'].user
+        return super().create(validated_data)
+    

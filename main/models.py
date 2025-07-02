@@ -1,11 +1,14 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser
+from django.utils import timezone
 
 
 class User(AbstractUser):
     phone = models.CharField(max_length=15, blank=True, null=True, unique=True)
-    profile_picture = models.ImageField(upload_to='kyc/profile_pictures/', blank=True, null=True)
+    profile_picture = models.ImageField(
+        upload_to='kyc/profile_pictures/', blank=True, null=True)
     is_driver = models.BooleanField(default=False)
+    verified = models.BooleanField(default=False)
 
 
 class DriverProfile(models.Model):
@@ -42,7 +45,6 @@ class Vehicle(models.Model):
     vehicle_description = models.TextField(blank=True, null=True)
     verified = models.BooleanField(default=False)
 
-
     def __str__(self):
         return f"{self.vehicle_make} {self.vehicle_model} ({self.vehicle_number}) - {self.driver.user.username}"
 
@@ -62,7 +64,7 @@ class Trip(models.Model):
         max_length=100, null=True, blank=True)
     vehicle = models.ForeignKey(
         Vehicle, on_delete=models.CASCADE, related_name='trips')
-    start_time = models.DateTimeField(auto_now_add=True)
+    start_time = models.DateTimeField()
     estimated_end_time = models.DateTimeField()
     available_seats = models.IntegerField(default=1)
     price_per_seat = models.DecimalField(max_digits=10, decimal_places=2)
@@ -118,3 +120,60 @@ class ChatMessage(models.Model):
     class Meta:
         ordering = ['timestamp']
         verbose_name_plural = 'Chat Messages'
+
+
+class FavouriteDriver(models.Model):
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name='favourite_drivers')
+    driver = models.ForeignKey(
+        DriverProfile, on_delete=models.CASCADE, related_name='favourited_by')
+
+    class Meta:
+        unique_together = ('user', 'driver')
+
+    def __str__(self):
+        return f"{self.user.username} favourites {self.driver.user.username}"
+
+
+class FavouriteDestination(models.Model):
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name='favourite_destinations')
+    destination = models.CharField(max_length=255)
+    save_as = models.CharField(max_length=50, blank=True, null=True)
+
+    class Meta:
+        unique_together = ('user', 'destination')
+
+    def __str__(self):
+        return f"{self.user.username} favourites {self.destination}"
+
+
+class UserReport(models.Model):
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name='reports_made')
+    reported_user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name='reports_received')
+    reason = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    is_resolved = models.BooleanField(default=False)
+    chat_thread = models.ForeignKey(
+        ChatThread, on_delete=models.CASCADE, related_name='reports', null=True, blank=True)
+
+    def __str__(self):
+        return f"Report by {self.user.username} against {self.reported_user.username}"
+
+
+class OTP(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='otps')
+    code = models.CharField(max_length=6)
+    expires_at = models.DateTimeField()
+
+    def is_expired(self):
+        return timezone.now() > self.expires_at
+
+
+class FCMDevice(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    token = models.CharField(max_length=255, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)

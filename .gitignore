@@ -21,3 +21,10 @@ db.sqlite3
 .gitingore
 
 kyc
+
+static/media/
+static/static_files/
+static/static_root/
+
+
+parwendo-c278c-firebase-adminsdk-fbsvc-46354a366f.json

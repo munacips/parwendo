@@ -3,6 +3,7 @@ from django.urls import path
 
 
 urlpatterns = [
+    path('verify_otp/', views.verify_otp, name='verify_otp'),
     path('get_token_from_oauth/', views.get_token_from_oauth,
          name='get_token_from_oauth'),
     path('trips/', views.trips, name='trips'),
@@ -23,5 +24,9 @@ urlpatterns = [
     path('users/<int:id>/', views.user_details, name='user_details'),
     path('users/<int:id>/statistics/',
          views.users_statistics, name='user_statistics'),
-
+    path('user_reports/', views.user_reports, name='user_reports'),
+    path('user_reports/<int:id>/', views.user_report_details,
+         name='user_report_details'),
+    path('resend_otp/', views.resend_otp, name='resend_otp'),
+    path('register_fcm_token/', views.register_fcm_token, name='register_fcm_token'),
 ]
