@@ -15,6 +15,7 @@ parwendo/Scripts
 parwendo/share
 
 .env
+.env.production
 
 db.sqlite3
 
