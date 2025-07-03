@@ -74,15 +74,18 @@ WSGI_APPLICATION = 'parwendo.wsgi.application'
 
 # Database
 # Production database configuration
+print(f"DATABASE_URL: {os.getenv('DATABASE_URL')}")
+print(f"Environment variables: {list(os.environ.keys())}")
+
 DATABASE_URL = os.getenv('DATABASE_URL')
 if DATABASE_URL:
-    # Parse DATABASE_URL for services like Heroku
+    print(f"Using DATABASE_URL: {DATABASE_URL}")
     import dj_database_url
     DATABASES = {
         'default': dj_database_url.parse(DATABASE_URL)
     }
 else:
-    # PostgreSQL configuration (recommended for production)
+    print("No DATABASE_URL found, using individual DB settings")
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.postgresql',
@@ -96,6 +99,8 @@ else:
             },
         }
     }
+
+print(f"Final DATABASES config: {DATABASES}")
 
 # Cache configuration (Redis recommended for production)
 CACHES = {
