@@ -116,7 +116,6 @@ class TripFilter(django_filters.FilterSet):
         return queryset
 
 
-
 class VehicleFilter(django_filters.FilterSet):
     class Meta:
         model = Vehicle
@@ -192,16 +191,19 @@ class UserReportFilter(django_filters.FilterSet):
 # ========== UTILS ==========
 
 
-def apply_filter_and_respond(model, filter_class, serializer_class, request):
-    filterset = filter_class(request.query_params,
-                             queryset=model.objects.all())
+def apply_filter_and_respond(model, filter_class, serializer_class, request, paginate=False):
+    filterset = filter_class(request.query_params, queryset=model.objects.all())
     if not filterset.is_valid():
         return Response(filterset.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    paginator = PageNumberPagination()
-    paginated_qs = paginator.paginate_queryset(filterset.qs, request)
-    serializer = serializer_class(paginated_qs, many=True)
-    return paginator.get_paginated_response(serializer.data)
+    if paginate:
+        paginator = PageNumberPagination()
+        paginated_qs = paginator.paginate_queryset(filterset.qs, request)
+        serializer = serializer_class(paginated_qs, many=True)
+        return paginator.get_paginated_response(serializer.data)
+    else:
+        serializer = serializer_class(filterset.qs, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
 
 def get_and_respond(model, pk, serializer_class):
@@ -344,7 +346,7 @@ def get_token_from_oauth(request, username=None, password=None):
 @permission_classes([IsAuthenticated])
 def trips(request):
     if request.method == 'GET':
-        return apply_filter_and_respond(Trip, TripFilter, TripSerializer, request)
+        return apply_filter_and_respond(Trip, TripFilter, TripSerializer, request, paginate=True)
     return create_object(request, TripCreateSerializer, {'driver': request.user.id})
 
 

@@ -224,6 +224,24 @@ class UserReportAdmin(admin.ModelAdmin):
                 request, f"User '{user.username}' has been blocked.", messages.WARNING
             )
             return HttpResponseRedirect(".")
+        
+        if "_unblock_user" in request.POST:
+            user = obj.reported_user
+            user.is_active = True
+            user.save()
+            obj.is_resolved = True
+            
+            # Send notification to the driver
+            fcm_tokens = FCMDevice.objects.filter(
+                user=user).values_list('token', flat=True)
+            for token in fcm_tokens:
+                send_push_notification(
+                    token, "Account UbBlocked", f"After a review, your account has been unblocked, we have sent you an email for further clarity.")
+
+            self.message_user(
+                request, f"User '{user.username}' has been blocked.", messages.WARNING
+            )
+            return HttpResponseRedirect(".")
 
         if "_go_to_next" in request.POST:
             next_obj = (
@@ -242,4 +260,5 @@ class UserReportAdmin(admin.ModelAdmin):
                 self.message_user(
                     request, "No more unresolved user reports.", messages.INFO)
                 return HttpResponseRedirect(".")
+            
         return super().response_change(request, obj)
