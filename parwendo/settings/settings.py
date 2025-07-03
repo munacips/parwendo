@@ -192,6 +192,8 @@ CORS_ALLOW_ALL_ORIGINS = True
 #     r"^https://.*\.yourdomain\.com$",  # Replace with your domain
 # ]
 
+CORS_ALLOWED_HOSTS = ['*']
+
 CORS_ALLOW_HEADERS = [
     'accept',
     'accept-encoding',
