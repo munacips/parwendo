@@ -320,20 +320,20 @@ if os.getenv('CELERY_BROKER_URL'):
     CELERY_TIMEZONE = TIME_ZONE
 
 # Sentry configuration for error tracking (optional)
-SENTRY_DSN = os.getenv('SENTRY_DSN')
-if SENTRY_DSN:
-    import sentry_sdk
-    from sentry_sdk.integrations.django import DjangoIntegration
-    from sentry_sdk.integrations.logging import LoggingIntegration
+# SENTRY_DSN = os.getenv('SENTRY_DSN')
+# if SENTRY_DSN:
+#     import sentry_sdk
+#     from sentry_sdk.integrations.django import DjangoIntegration
+#     from sentry_sdk.integrations.logging import LoggingIntegration
     
-    sentry_logging = LoggingIntegration(
-        level=logging.INFO,
-        event_level=logging.ERROR
-    )
+#     sentry_logging = LoggingIntegration(
+#         level=logging.INFO,
+#         event_level=logging.ERROR
+#     )
     
-    sentry_sdk.init(
-        dsn=SENTRY_DSN,
-        integrations=[DjangoIntegration(), sentry_logging],
-        traces_sample_rate=0.1,
-        send_default_pii=True
-    )
+#     sentry_sdk.init(
+#         dsn=SENTRY_DSN,
+#         integrations=[DjangoIntegration(), sentry_logging],
+#         traces_sample_rate=0.1,
+#         send_default_pii=True
+#     )
