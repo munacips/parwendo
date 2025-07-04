@@ -3,6 +3,8 @@ main/*.pyc
 main/*.pyo
 main/*.pyd
 
+*.pyc
+
 
 parwendo/__pycache__
 
