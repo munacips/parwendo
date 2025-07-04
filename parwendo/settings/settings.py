@@ -101,12 +101,10 @@ else:
 CACHES = {
     'default': {
         'BACKEND': 'django_redis.cache.RedisCache',
-        'LOCATION': os.getenv('REDIS_URL', 'redis://localhost:6379/1'),
-        'OPTIONS': {
-            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
-        }
+        'LOCATION': os.environ['REDIS_URL'],
     }
 }
+
 
 # Session configuration
 SESSION_ENGINE = 'django.contrib.sessions.backends.cache'
