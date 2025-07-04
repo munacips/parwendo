@@ -194,10 +194,3 @@ EMAIL_USE_TLS = True
 EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER')
 EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')
 DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
-
-
-print("=== ENVIRONMENT VARIABLES DEBUG ===")
-print(f"DATABASE_URL: {'SET' if os.getenv('DATABASE_URL') else 'NOT SET'}")
-print(f"DB_NAME: {'SET' if os.getenv('DB_NAME') else 'NOT SET'}")
-print(f"DB_HOST: {'SET' if os.getenv('DB_HOST') else 'NOT SET'}")
-print("=== END DEBUG ===")
