@@ -26,6 +26,10 @@ from django.http import Http404, FileResponse
 from django.conf import settings
 import firebase_admin
 from firebase_admin import credentials, messaging
+from django.contrib.auth import authenticate
+from oauth2_provider.models import Application, AccessToken, RefreshToken
+from oauth2_provider import settings as oauth2_settings
+from oauthlib.common import generate_token
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -304,11 +308,9 @@ def delete_object(model, pk):
 @csrf_exempt
 @api_view(['POST'])
 @permission_classes([AllowAny])
-def get_token_from_oauth(request, username=None, password=None):
-    if username is None:
-        username = request.POST.get('username') or request.data.get('username')
-    if password is None:
-        password = request.POST.get('password') or request.data.get('password')
+def get_token_from_oauth(request):
+    username = request.POST.get('username') or request.data.get('username')
+    password = request.POST.get('password') or request.data.get('password')
 
     if not username or not password:
         return Response(
@@ -316,29 +318,53 @@ def get_token_from_oauth(request, username=None, password=None):
             status=status.HTTP_400_BAD_REQUEST
         )
 
-    response = requests.post(
-        'https://parwendo-eqps.onrender.com/oauth2/token/',
-        data={
-            'grant_type': 'password',
-            'username': username,
-            'password': password,
-            'client_id': os.getenv("CLIENT_ID"),
-            'client_secret': os.getenv("CLIENT_SECRET"),
-        })
-
-    if response.status_code == 200:
-        # Add User ID and Username to the response
-        user_data = response.json()
-        user = User.objects.get(username=username)
-        user_data['user_id'] = user.id
-        user_data['username'] = username
-
-        return Response(user_data, status=status.HTTP_200_OK)
-    else:
+    # Authenticate user (same validation as HTTP endpoint)
+    user = authenticate(username=username, password=password)
+    if not user:
         return Response(
-            {'error': 'Authentication failed', 'details': response.text},
+            {'error': 'Authentication failed', 'details': 'Invalid credentials'},
             status=status.HTTP_401_UNAUTHORIZED
         )
+
+    # Validate OAuth application (same as HTTP endpoint)
+    try:
+        application = Application.objects.get(
+            client_id=os.getenv("CLIENT_ID"),
+            client_secret=os.getenv("CLIENT_SECRET")
+        )
+    except Application.DoesNotExist:
+        return Response(
+            {'error': 'Authentication failed', 'details': 'Invalid client credentials'},
+            status=status.HTTP_401_UNAUTHORIZED
+        )
+
+    # Create access token (same as HTTP endpoint)
+    access_token = AccessToken.objects.create(
+        user=user,
+        application=application,
+        token=generate_token(),
+        expires=timezone.now() + timedelta(seconds=oauth2_settings.ACCESS_TOKEN_EXPIRE_SECONDS),
+        scope='read write'  # Use the same scopes as your OAuth app
+    )
+
+    # Create refresh token (same as HTTP endpoint)
+    refresh_token = RefreshToken.objects.create(
+        user=user,
+        application=application,
+        token=generate_token(),
+        access_token=access_token
+    )
+
+    # Return exact same response format as original
+    return Response({
+        'access_token': access_token.token,
+        'expires_in': oauth2_settings.ACCESS_TOKEN_EXPIRE_SECONDS,
+        'token_type': 'Bearer',
+        'scope': access_token.scope,
+        'refresh_token': refresh_token.token,
+        'user_id': user.id,
+        'username': username,
+    }, status=status.HTTP_200_OK)
 
 
 @csrf_exempt
