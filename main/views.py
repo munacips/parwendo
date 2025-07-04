@@ -6,11 +6,8 @@ from rest_framework.response import Response
 from rest_framework import status
 from .models import User, DriverProfile, FCMDevice, Vehicle, Trip, Booking, ChatThread, ChatMessage, UserReport, OTP, FCMDevice
 from .serializers import UserReportCreateSerializer, UserReportSerializer, ChatCreateMessageSerializer, CreateThreadSerializer, UserStatisticsSerializer, CreateVehicleSerializer, UserSerializer, TripCreateSerializer, BookingCreateSerializer, CreateDriverProfileSerializer, DriverProfileSerializer, VehicleSerializer, TripSerializer, BookingSerializer, ChatThreadSerializer, ChatMessageSerializer
-from django_filters.rest_framework import DjangoFilterBackend
-from rest_framework.filters import SearchFilter, OrderingFilter
 import django_filters
 from rest_framework.pagination import PageNumberPagination
-import requests
 import os
 from dotenv import load_dotenv
 from pathlib import Path
@@ -26,10 +23,8 @@ from django.http import Http404, FileResponse
 from django.conf import settings
 import firebase_admin
 from firebase_admin import credentials, messaging
-from django.contrib.auth import authenticate
-from oauth2_provider.models import Application, AccessToken, RefreshToken
-from oauth2_provider import settings as oauth2_settings
-from oauthlib.common import generate_token
+from django.http import HttpRequest
+from oauth2_provider.views.base import TokenView
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -308,70 +303,40 @@ def delete_object(model, pk):
 
 @csrf_exempt
 @api_view(['POST'])
-@authentication_classes([])
 @permission_classes([AllowAny])
+@authentication_classes([])
 def get_token_from_oauth(request):
-    username = request.data.get('username')
-    password = request.data.get('password')
+    username = request.POST.get('username') or request.data.get('username')
+    password = request.POST.get('password') or request.data.get('password')
 
     if not username or not password:
-        return Response(
-            {'error': 'Username and password are required'},
-            status=status.HTTP_400_BAD_REQUEST
-        )
+        return Response({'error': 'Username and password are required'}, status=400)
 
-    user = authenticate(username=username, password=password)
-    if not user:
-        return Response(
-            {'error': 'Authentication failed', 'details': 'Invalid credentials'},
-            status=status.HTTP_401_UNAUTHORIZED
-        )
+    # Build a fake request mimicking OAuth2 token endpoint
+    oauth_request = HttpRequest()
+    oauth_request.method = "POST"
+    oauth_request.POST = {
+        "grant_type": "password",
+        "username": username,
+        "password": password,
+        "client_id": os.getenv("CLIENT_ID"),
+        "client_secret": os.getenv("CLIENT_SECRET"),
+    }
 
-    client_id = os.getenv("CLIENT_ID")
-    client_secret = os.getenv("CLIENT_SECRET")
-    if not client_id or not client_secret:
-        return Response(
-            {'error': 'Server misconfiguration',
-                'details': 'Missing CLIENT_ID or CLIENT_SECRET'},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
+    token_view = TokenView.as_view()
+    response = token_view(oauth_request)
+    if response.status_code == 200:
+        import json
+        token_data = json.loads(response.content)
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        user = User.objects.get(username=username)
+        token_data['user_id'] = user.id
+        token_data['username'] = username
 
-    try:
-        application = Application.objects.get(
-            client_id=client_id, client_secret=client_secret)
-    except Application.DoesNotExist:
-        return Response(
-            {'error': 'Authentication failed',
-                'details': 'Invalid client credentials'},
-            status=status.HTTP_401_UNAUTHORIZED
-        )
-
-    expires = timezone.now() + timedelta(seconds=oauth2_settings.ACCESS_TOKEN_EXPIRE_SECONDS)
-
-    access_token = AccessToken.objects.create(
-        user=user,
-        application=application,
-        token=generate_token(),
-        expires=expires,
-        scope='read write'
-    )
-
-    refresh_token = RefreshToken.objects.create(
-        user=user,
-        application=application,
-        token=generate_token(),
-        access_token=access_token
-    )
-
-    return Response({
-        'access_token': access_token.token,
-        'expires_in': oauth2_settings.ACCESS_TOKEN_EXPIRE_SECONDS,
-        'token_type': 'Bearer',
-        'scope': access_token.scope,
-        'refresh_token': refresh_token.token,
-        'user_id': user.id,
-        'username': user.username,
-    }, status=status.HTTP_200_OK)
+        return Response(token_data, status=200)
+    else:
+        return Response({'error': 'Authentication failed', 'details': response.content.decode()}, status=response.status_code)
 
 
 @csrf_exempt
