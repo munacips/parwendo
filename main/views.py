@@ -196,7 +196,8 @@ class UserReportFilter(django_filters.FilterSet):
 
 
 def apply_filter_and_respond(model, filter_class, serializer_class, request, paginate=False):
-    filterset = filter_class(request.query_params, queryset=model.objects.all())
+    filterset = filter_class(request.query_params,
+                             queryset=model.objects.all())
     if not filterset.is_valid():
         return Response(filterset.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -310,8 +311,8 @@ def delete_object(model, pk):
 @authentication_classes([])
 @permission_classes([AllowAny])
 def get_token_from_oauth(request):
-    username = request.POST.get('username') or request.data.get('username')
-    password = request.POST.get('password') or request.data.get('password')
+    username = request.data.get('username')
+    password = request.data.get('password')
 
     if not username or not password:
         return Response(
@@ -319,7 +320,6 @@ def get_token_from_oauth(request):
             status=status.HTTP_400_BAD_REQUEST
         )
 
-    # Authenticate user (same validation as HTTP endpoint)
     user = authenticate(username=username, password=password)
     if not user:
         return Response(
@@ -327,28 +327,35 @@ def get_token_from_oauth(request):
             status=status.HTTP_401_UNAUTHORIZED
         )
 
-    # Validate OAuth application (same as HTTP endpoint)
+    client_id = os.getenv("CLIENT_ID")
+    client_secret = os.getenv("CLIENT_SECRET")
+    if not client_id or not client_secret:
+        return Response(
+            {'error': 'Server misconfiguration',
+                'details': 'Missing CLIENT_ID or CLIENT_SECRET'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
     try:
         application = Application.objects.get(
-            client_id=os.getenv("CLIENT_ID"),
-            client_secret=os.getenv("CLIENT_SECRET")
-        )
+            client_id=client_id, client_secret=client_secret)
     except Application.DoesNotExist:
         return Response(
-            {'error': 'Authentication failed', 'details': 'Invalid client credentials'},
+            {'error': 'Authentication failed',
+                'details': 'Invalid client credentials'},
             status=status.HTTP_401_UNAUTHORIZED
         )
 
-    # Create access token (same as HTTP endpoint)
+    expires = timezone.now() + timedelta(seconds=oauth2_settings.ACCESS_TOKEN_EXPIRE_SECONDS)
+
     access_token = AccessToken.objects.create(
         user=user,
         application=application,
         token=generate_token(),
-        expires=timezone.now() + timedelta(seconds=oauth2_settings.ACCESS_TOKEN_EXPIRE_SECONDS),
-        scope='read write'  # Use the same scopes as your OAuth app
+        expires=expires,
+        scope='read write'
     )
 
-    # Create refresh token (same as HTTP endpoint)
     refresh_token = RefreshToken.objects.create(
         user=user,
         application=application,
@@ -356,7 +363,6 @@ def get_token_from_oauth(request):
         access_token=access_token
     )
 
-    # Return exact same response format as original
     return Response({
         'access_token': access_token.token,
         'expires_in': oauth2_settings.ACCESS_TOKEN_EXPIRE_SECONDS,
@@ -364,7 +370,7 @@ def get_token_from_oauth(request):
         'scope': access_token.scope,
         'refresh_token': refresh_token.token,
         'user_id': user.id,
-        'username': username,
+        'username': user.username,
     }, status=status.HTTP_200_OK)
 
 
@@ -567,7 +573,6 @@ def booking_details(request, id):
         serializer = BookingSerializer(obj, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
-
 
             def handle_status(status):
                 match status:
