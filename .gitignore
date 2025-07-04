@@ -21,9 +21,11 @@ db.sqlite3
 
 kyc
 
-static/media/
-static/static_files/
-static/static_root/
+static/media/kyc/licenses/*
+static/media/kyc/national_ids/*
+static/media/kyc/profile_pictures/*
+static/media/vehicles/insurance/*
+static/media/vehicles/registration/*
 
 
 parwendo-c278c-firebase-adminsdk-fbsvc-46354a366f.json
