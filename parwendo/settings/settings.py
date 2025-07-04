@@ -79,7 +79,7 @@ DATABASE_URL = os.getenv('DATABASE_URL')
 if DATABASE_URL:
     import dj_database_url
     DATABASES = {
-        'default': dj_database_url.config(DATABASE_URL)
+        'default': dj_database_url.config(default=DATABASE_URL)
     }
 else:
     DATABASES = {
