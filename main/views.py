@@ -307,7 +307,7 @@ def delete_object(model, pk):
 
 @csrf_exempt
 @api_view(['POST'])
-@permission_classes([AllowAny])
+@permission_classes([])
 def get_token_from_oauth(request):
     username = request.POST.get('username') or request.data.get('username')
     password = request.POST.get('password') or request.data.get('password')
