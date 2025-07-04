@@ -317,7 +317,7 @@ def get_token_from_oauth(request, username=None, password=None):
         )
 
     response = requests.post(
-        'http://localhost:8000/oauth2/token/',
+        'https://parwendo-eqps.onrender.com/oauth2/token/',
         data={
             'grant_type': 'password',
             'username': username,
@@ -712,6 +712,7 @@ def resend_otp(request):
 
 @csrf_exempt
 @api_view(['POST'])
+@permission_classes([AllowAny])
 def register_fcm_token(request):
     token = request.data.get('token')
     if token:
