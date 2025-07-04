@@ -12,6 +12,8 @@ parwendo/Lib
 parwendo/Scripts
 parwendo/share
 
+parwendo/settings/dev.py
+
 .env
 .env.production
 
@@ -21,8 +23,11 @@ db.sqlite3
 
 
 static/media/kyc/licenses/*
+!static/media/kyc/licenses/.gitkeep
 static/media/kyc/national_ids/*
+!static/media/kyc/national_ids/.gitkeep
 static/media/kyc/profile_pictures/*
+!static/media/kyc/profile_pictures/.gitkeep
 static/media/vehicles/insurance/*
 static/media/vehicles/registration/*
 
