@@ -19,7 +19,6 @@ db.sqlite3
 
 .gitingore
 
-kyc
 
 static/media/kyc/licenses/*
 static/media/kyc/national_ids/*
