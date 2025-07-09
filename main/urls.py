@@ -29,4 +29,5 @@ urlpatterns = [
          name='user_report_details'),
     path('resend_otp/', views.resend_otp, name='resend_otp'),
     path('register_fcm_token/', views.register_fcm_token, name='register_fcm_token'),
+    path('debug_time/', views.debug_time, name='debug_time'),
 ]
