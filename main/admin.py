@@ -90,8 +90,7 @@ def get_file_preview(file_field, title):
     except ValueError:
         return f"{title} file not found"
 
-admin.site.unregister(User)
-@admin.register(User)
+
 class CustomUserAdmin(BaseUserAdmin):
     def get_fieldsets(self, request, obj=None):
         fieldsets = super().get_fieldsets(request, obj)
@@ -136,6 +135,8 @@ class CustomUserAdmin(BaseUserAdmin):
     def has_view_permission(self, request, obj=None):
         return request.user.is_staff
 
+admin.site.unregister(User)
+admin.site.register(User, CustomUserAdmin)
 
 @admin.register(Vehicle)
 class VehicleAdmin(admin.ModelAdmin):
