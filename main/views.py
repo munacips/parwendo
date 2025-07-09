@@ -387,7 +387,6 @@ def users(request):
         return apply_filter_and_respond(User, UserFilter, UserSerializer, request)
 
     data = request.data.copy()
-    data['password'] = make_password(data.get('password', ''))
     serializer = UserSerializer(data=data, context={'request': request})
     if not serializer.is_valid():
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
