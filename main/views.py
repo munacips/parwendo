@@ -709,7 +709,7 @@ def resend_otp(request):
 
 @csrf_exempt
 @api_view(['POST'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def register_fcm_token(request):
     token = request.data.get('token')
     if token:
