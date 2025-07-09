@@ -1,12 +1,14 @@
 from django.contrib import admin
-from .models import User, DriverProfile, Vehicle, Trip, Booking, ChatThread, ChatMessage, UserReport, FCMDevice
+from .models import DriverProfile, Vehicle, Trip, Booking, ChatThread, ChatMessage, UserReport, FCMDevice
 from django.http import HttpResponseRedirect
 from django.contrib import messages
 from django.utils.html import format_html
 import os
 from django.urls import reverse
 from firebase_admin import messaging
-from pathlib import Path
+from django.contrib.auth.models import User
+from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
+
 
 
 def send_push_notification(token, title, body, data=None):
@@ -22,7 +24,7 @@ def send_push_notification(token, title, body, data=None):
     response = messaging.send(message)
 
 
-admin.site.register([User, Trip,
+admin.site.register([Trip,
                     Booking, ChatThread, ChatMessage, FCMDevice])
 
 
@@ -87,6 +89,52 @@ def get_file_preview(file_field, title):
 
     except ValueError:
         return f"{title} file not found"
+
+
+@admin.register(User)
+class CustomUserAdmin(BaseUserAdmin):
+    def get_fieldsets(self, request, obj=None):
+        fieldsets = super().get_fieldsets(request, obj)
+        
+        # Only show permissions to superusers
+        if not request.user.is_superuser:
+            # Create a new fieldsets tuple without permissions
+            new_fieldsets = []
+            for name, options in fieldsets:
+                if name == 'Permissions':
+                    # Skip the entire Permissions section
+                    continue
+                elif name is None and 'fields' in options:
+                    # This is usually the first fieldset, check if it contains permission fields
+                    fields = options['fields']
+                    filtered_fields = [
+                        field for field in fields 
+                        if field not in ['user_permissions', 'groups', 'is_superuser']
+                    ]
+                    if filtered_fields:  # Only include if there are remaining fields
+                        new_fieldsets.append((name, {**options, 'fields': filtered_fields}))
+                else:
+                    new_fieldsets.append((name, options))
+            
+            fieldsets = tuple(new_fieldsets)
+        
+        return fieldsets
+    
+    def get_readonly_fields(self, request, obj=None):
+        readonly_fields = list(super().get_readonly_fields(request, obj))
+        
+        # Make permissions read-only for non-superusers (as backup)
+        if not request.user.is_superuser:
+            readonly_fields.extend(['user_permissions', 'groups', 'is_superuser'])
+        
+        return readonly_fields
+
+    def has_change_permission(self, request, obj=None):
+        # Allow staff to change users, but permissions will be hidden/readonly
+        return request.user.is_staff
+
+    def has_view_permission(self, request, obj=None):
+        return request.user.is_staff
 
 
 @admin.register(Vehicle)
