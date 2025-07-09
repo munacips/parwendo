@@ -1,13 +1,11 @@
 from django.contrib import admin
-from .models import DriverProfile, Vehicle, Trip, Booking, ChatThread, ChatMessage, UserReport, FCMDevice
+from .models import User, DriverProfile, Vehicle, Trip, Booking, ChatThread, ChatMessage, UserReport, FCMDevice
 from django.http import HttpResponseRedirect
 from django.contrib import messages
 from django.utils.html import format_html
 import os
 from django.urls import reverse
 from firebase_admin import messaging
-from django.contrib.auth.models import User
-from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 
 
 
@@ -91,7 +89,7 @@ def get_file_preview(file_field, title):
         return f"{title} file not found"
 
 
-class CustomUserAdmin(BaseUserAdmin):
+class CustomUserAdmin(admin.ModelAdmin):
     def get_fieldsets(self, request, obj=None):
         fieldsets = super().get_fieldsets(request, obj)
         
@@ -135,7 +133,6 @@ class CustomUserAdmin(BaseUserAdmin):
     def has_view_permission(self, request, obj=None):
         return request.user.is_staff
 
-admin.site.unregister(User)
 admin.site.register(User, CustomUserAdmin)
 
 @admin.register(Vehicle)
