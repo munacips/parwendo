@@ -90,7 +90,7 @@ def get_file_preview(file_field, title):
     except ValueError:
         return f"{title} file not found"
 
-
+admin.site.unregister(User)
 @admin.register(User)
 class CustomUserAdmin(BaseUserAdmin):
     def get_fieldsets(self, request, obj=None):
