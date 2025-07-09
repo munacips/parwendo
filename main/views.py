@@ -712,9 +712,11 @@ def resend_otp(request):
 @permission_classes([IsAuthenticated])
 def register_fcm_token(request):
     token = request.data.get('token')
+    user_id = request.data.get('user_id')
+    user = User.objects.get(id=user_id)
     if token:
         FCMDevice.objects.update_or_create(
-            user=request.user,
+            user=user,
             defaults={'token': token}
         )
         return Response({"message": "FCM token registered successfully"}, status=200)
