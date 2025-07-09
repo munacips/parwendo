@@ -6,6 +6,7 @@ from django.utils.html import format_html
 import os
 from django.urls import reverse
 from firebase_admin import messaging
+from django.contrib.admin.models import LogEntry
 
 
 
@@ -308,3 +309,12 @@ class UserReportAdmin(admin.ModelAdmin):
                 return HttpResponseRedirect(".")
             
         return super().response_change(request, obj)
+
+
+class LogEntryAdmin(admin.ModelAdmin):
+    readonly_fields = [f.name for f in LogEntry._meta.fields]
+    list_display = ['action_time', 'user', 'content_type', 'object_repr', 'action_flag', 'change_message']
+    list_filter = ['user', 'content_type', 'action_flag']
+    search_fields = ['object_repr', 'change_message']
+
+admin.site.register(LogEntry, LogEntryAdmin)
