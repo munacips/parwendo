@@ -721,3 +721,13 @@ def register_fcm_token(request):
         )
         return Response({"message": "FCM token registered successfully"}, status=200)
     return Response({"error": "Token is required"}, status=400)
+
+
+from django.utils import timezone
+from django.http import JsonResponse
+
+def debug_time(request):
+    return JsonResponse({
+        'server_time': timezone.now().isoformat(),
+        'user': str(request.user),
+    })
