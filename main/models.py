@@ -9,6 +9,7 @@ class User(AbstractUser):
         upload_to='kyc/profile_pictures/', blank=True, null=True)
     is_driver = models.BooleanField(default=False)
     verified = models.BooleanField(default=False)
+    is_private = models.BooleanField(default=False)
 
 
 class DriverProfile(models.Model):
@@ -44,6 +45,8 @@ class Vehicle(models.Model):
     vehicle_capacity = models.IntegerField(default=1)
     vehicle_description = models.TextField(blank=True, null=True)
     verified = models.BooleanField(default=False)
+    vehicle_picture = models.ImageField(
+        upload_to='vehicles/pictures/', blank=True, null=True)
 
     def __str__(self):
         return f"{self.vehicle_make} {self.vehicle_model} ({self.vehicle_number}) - {self.driver.user.username}"
@@ -177,3 +180,17 @@ class FCMDevice(models.Model):
     token = models.CharField(max_length=255, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+
+class Review(models.Model):
+    trip = models.ForeignKey(
+        Trip, on_delete=models.CASCADE, related_name='reviews')
+    reviewer = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name='reviews_given')
+    rating = models.IntegerField()
+    comment = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Review by {self.reviewer.username} for trip {self.trip.id}"
+    

@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import User, DriverProfile, Vehicle, Trip, Booking, ChatThread, ChatMessage, UserReport, FCMDevice
+from .models import User, DriverProfile, Vehicle, Trip, Booking, ChatThread, ChatMessage, UserReport, FCMDevice, Review
 from django.http import HttpResponseRedirect
 from django.contrib import messages
 from django.utils.html import format_html
@@ -24,7 +24,7 @@ def send_push_notification(token, title, body, data=None):
 
 
 admin.site.register([Trip,
-                    Booking, ChatThread, ChatMessage, FCMDevice])
+                    Booking, ChatThread, ChatMessage, FCMDevice, Review])
 
 
 def get_file_preview(file_field, title):

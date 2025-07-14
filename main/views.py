@@ -4,8 +4,8 @@ from rest_framework.decorators import api_view, permission_classes, authenticati
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework import status
-from .models import User, DriverProfile, FCMDevice, Vehicle, Trip, Booking, ChatThread, ChatMessage, UserReport, OTP, FCMDevice
-from .serializers import UserReportCreateSerializer, UserReportSerializer, ChatCreateMessageSerializer, CreateThreadSerializer, UserStatisticsSerializer, CreateVehicleSerializer, UserSerializer, TripCreateSerializer, BookingCreateSerializer, CreateDriverProfileSerializer, DriverProfileSerializer, VehicleSerializer, TripSerializer, BookingSerializer, ChatThreadSerializer, ChatMessageSerializer
+from .models import User, DriverProfile, FCMDevice, Vehicle, Trip, Booking, ChatThread, ChatMessage, UserReport, OTP, FCMDevice, Review
+from .serializers import UserReportCreateSerializer, UserReportSerializer, ChatCreateMessageSerializer, CreateThreadSerializer, UserStatisticsSerializer, CreateVehicleSerializer, UserSerializer, TripCreateSerializer, BookingCreateSerializer, CreateDriverProfileSerializer, DriverProfileSerializer, VehicleSerializer, TripSerializer, BookingSerializer, ChatThreadSerializer, ChatMessageSerializer, ReviewSerializer, CreateReviewSerializer
 import django_filters
 from rest_framework.pagination import PageNumberPagination
 import os
@@ -18,13 +18,13 @@ from django.utils import timezone
 from datetime import timedelta
 import random
 from django.core.mail import send_mail
-from django.contrib.auth.hashers import make_password
 from django.http import Http404, FileResponse
 from django.conf import settings
 import firebase_admin
 from firebase_admin import credentials, messaging
 from django.http import HttpRequest
 from oauth2_provider.views.base import TokenView
+from django.http import JsonResponse
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -186,6 +186,17 @@ class UserReportFilter(django_filters.FilterSet):
     class Meta:
         model = UserReport
         fields = ['user', 'reported_user', 'chat_thread']
+
+
+class ReviewFilter(django_filters.FilterSet):
+    trip = django_filters.NumberFilter(
+        field_name='trip__id', lookup_expr='exact')
+    reviewer = django_filters.NumberFilter(
+        field_name='reviewer__id', lookup_expr='exact')
+
+    class Meta:
+        model = Review
+        fields = ['trip', 'reviewer']
 
 # ========== UTILS ==========
 
@@ -721,8 +732,25 @@ def register_fcm_token(request):
     return Response({"error": "Token is required"}, status=400)
 
 
-from django.utils import timezone
-from django.http import JsonResponse
+@csrf_exempt
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def reviews(request):
+    if request.method == 'GET':
+        return apply_filter_and_respond(Review, None, ReviewSerializer, request, paginate=True)
+    return create_object(request, CreateReviewSerializer, {'reviewer': request.user.id})
+
+
+@csrf_exempt
+@api_view(['GET', 'PATCH', 'DELETE'])
+@permission_classes([IsAuthenticated])
+def review_details(request, id):
+    if request.method == 'GET':
+        return get_and_respond(Review, id, ReviewSerializer)
+    elif request.method == 'PATCH':
+        return update_object(request, Review, id, ReviewSerializer)
+    return delete_object(Review, id)
+
 
 def debug_time(request):
     return JsonResponse({

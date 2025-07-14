@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Booking, ChatMessage, ChatThread, DriverProfile, Trip, User, Vehicle, UserReport
+from .models import Booking, ChatMessage, ChatThread, DriverProfile, Trip, User, Vehicle, UserReport, Review
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -8,7 +8,7 @@ class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ['id', 'username', 'email', 'first_name',
-                  'last_name', 'phone', 'is_driver','profile_picture', 'password']
+                  'last_name', 'phone', 'is_driver','profile_picture', 'password', 'is_private']
 
     def create(self, validated_data):
         password = validated_data.pop('password')
@@ -47,7 +47,7 @@ class VehicleSerializer(serializers.ModelSerializer):
     class Meta:
         model = Vehicle
         fields = ['id', 'driver', 'vehicle_number', 'vehicle_type', 'vehicle_make',
-                  'vehicle_model', 'vehicle_color', 'vehicle_year', 'vehicle_capacity', 'vehicle_description']
+                  'vehicle_model', 'vehicle_color', 'vehicle_year', 'vehicle_capacity', 'vehicle_description', 'vehicle_picture']
         
 
 class CreateVehicleSerializer(serializers.ModelSerializer):
@@ -56,7 +56,7 @@ class CreateVehicleSerializer(serializers.ModelSerializer):
     class Meta:
         model = Vehicle
         fields = ['driver', 'vehicle_number', 'vehicle_type', 'vehicle_make',
-                  'vehicle_model', 'vehicle_color', 'vehicle_year', 'vehicle_capacity', 'vehicle_description', 'vehicle_registration_upload', 'insurance_upload']
+                  'vehicle_model', 'vehicle_color', 'vehicle_year', 'vehicle_capacity', 'vehicle_description', 'vehicle_registration_upload', 'insurance_upload', 'vehicle_picture']
 
     def create(self, validated_data):
         validated_data['driver'] = self.context['request'].user.driver_profile
@@ -181,4 +181,25 @@ class UserReportCreateSerializer(serializers.ModelSerializer):
         # Set the user to the current user from context
         validated_data['user'] = self.context['request'].user
         return super().create(validated_data)
+    
+
+class ReviewSerializer(serializers.ModelSerializer):
+    trip = TripSerializer()
+    reviewer = UserSerializer()
+
+    class Meta:
+        model = Review
+        fields = ['id', 'trip', 'reviewer', 'rating', 'comment', 'created_at']
+
+
+class CreateReviewSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Review
+        fields = ['trip', 'reviewer', 'rating', 'comment']
+
+    def create(self, validated_data):
+        # Set the reviewer to the current user from context
+        validated_data['reviewer'] = self.context['request'].user
+        return super().create(validated_data)
+    
     
