@@ -71,6 +71,8 @@ class Trip(models.Model):
     estimated_end_time = models.DateTimeField()
     available_seats = models.IntegerField(default=1)
     price_per_seat = models.DecimalField(max_digits=10, decimal_places=2)
+    status = models.CharField(max_length=20, choices=[(
+        'scheduled', 'Scheduled'), ('ongoing', 'Ongoing'), ('completed', 'Completed'), ('cancelled', 'Cancelled')], default='scheduled')
 
     def __str__(self):
         return f"Trip {self.id} by {self.driver.user.username} to {self.destination}"
@@ -86,6 +88,9 @@ class Booking(models.Model):
     total_price = models.DecimalField(max_digits=10, decimal_places=2)
     status = models.CharField(max_length=20, choices=[('pending', 'Pending'), (
         'confirmed', 'Confirmed'), ('cancelled', 'Cancelled'), ('rejected', 'Rejected')], default='pending')
+
+    class Meta:
+        unique_together = ('trip', 'passenger')
 
     def __str__(self):
         return f"Booking {self.id} for {self.passenger.username} on trip {self.trip.id}"

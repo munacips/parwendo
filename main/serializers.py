@@ -53,6 +53,7 @@ class VehicleSerializer(serializers.ModelSerializer):
 class CreateVehicleSerializer(serializers.ModelSerializer):
     driver = serializers.PrimaryKeyRelatedField(read_only=True)
 
+
     class Meta:
         model = Vehicle
         fields = ['driver', 'vehicle_number', 'vehicle_type', 'vehicle_make',
@@ -68,11 +69,12 @@ class TripSerializer(serializers.ModelSerializer):
     vehicle = VehicleSerializer()
     driver_name = serializers.SerializerMethodField()
     vehicle_name = serializers.SerializerMethodField()
+    vehicle_picture = serializers.ImageField(source='vehicle.vehicle_picture', read_only=True)  
 
     class Meta:
         model = Trip
         fields = ['id', 'driver', 'destination', 'start_location', 'vehicle', 'vehicle_name', 'driver_name', 'start_time', 'estimated_end_time', 'available_seats',
-                  'price_per_seat', 'start_x_coordinates', 'start_y_coordinates', 'destination_x_coordinates', 'destination_y_coordinates']
+                  'price_per_seat', 'start_x_coordinates', 'start_y_coordinates', 'destination_x_coordinates', 'destination_y_coordinates', 'status', 'vehicle_picture']
 
     def get_driver_name(self, obj):
         return obj.driver.user.first_name + ' ' + obj.driver.user.last_name if obj.driver and obj.driver.user else None
