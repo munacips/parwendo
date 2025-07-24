@@ -196,6 +196,9 @@ class Review(models.Model):
     comment = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
+    class Meta:
+        unique_together = ('trip', 'reviewer')
+
     def __str__(self):
         return f"Review by {self.reviewer.username} for trip {self.trip.id}"
     
