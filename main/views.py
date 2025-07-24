@@ -563,7 +563,7 @@ def booking_details(request, id):
 
             # Send notification to the passenger
             if 'status' in serializer.data:
-                trip = Trip.objects.get(id=obj.trip)
+                trip = Trip.objects.get(id=obj.trip.id)
                 passenger = obj.passenger
                 fcm_tokens = FCMDevice.objects.filter(
                     user=passenger).values_list('token', flat=True)
