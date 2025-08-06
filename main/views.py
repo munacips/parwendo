@@ -752,6 +752,7 @@ def review_details(request, id):
     return delete_object(Review, id)
 
 
+
 def debug_time(request):
     return JsonResponse({
         'server_time': timezone.now().isoformat(),
