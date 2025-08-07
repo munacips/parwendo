@@ -9,6 +9,7 @@ from .serializers import UserReportCreateSerializer, UserReportSerializer, ChatC
 import django_filters
 from rest_framework.pagination import PageNumberPagination
 import os
+import math
 from dotenv import load_dotenv
 from pathlib import Path
 from django.views.decorators.csrf import csrf_exempt
@@ -53,39 +54,59 @@ class TripFilter(django_filters.FilterSet):
             return queryset.filter(start_time__date=value)
         return queryset
 
-    def filter_by_coordinates(self, queryset, name, value):
+    def filter_by_coordinates(self, queryset):
         """
-        Filter using simple distance calculation
-        Usage: ?near_x=40.7128&near_y=-74.0060&radius_km=1
+        Filter using improved geographic distance calculation
+        Usage: ?near_lat=40.7128&near_lon=-74.0060&radius_km=1
+        
+        Uses Haversine formula for more accurate distance on lat/lon coordinates
         """
         request = self.request
         if not request:
             return queryset
 
-        near_x = request.GET.get('near_x')
-        near_y = request.GET.get('near_y')
+        near_lat = request.GET.get('near_x')
+        near_lon = request.GET.get('near_y') 
         radius_km = float(request.GET.get('radius_km', 1))
 
-        if near_x and near_y:
+        if near_lat and near_lon:
             try:
-                near_x = float(near_x)
-                near_y = float(near_y)
+                near_lat = float(near_lat)
+                near_lon = float(near_lon)
 
-                # Simple bounding box filter (approximate)
-                # 1 degree ≈ 111 km
-                degree_radius = radius_km / 111.0
+                # More accurate bounding box calculation
+                # Latitude: 1 degree ≈ 111 km everywhere
+                lat_degree_radius = radius_km / 111.0
+                
+                # Longitude: varies by latitude
+                lon_degree_radius = radius_km / (111.0 * math.cos(math.radians(near_lat)))
 
-                return queryset.filter(
-                    start_location_x__gte=near_x - degree_radius,
-                    start_location_x__lte=near_x + degree_radius,
-                    start_location_y__gte=near_y - degree_radius,
-                    start_location_y__lte=near_y + degree_radius
+                # Filter by bounding box first (fast database operation)
+                bbox_queryset = queryset.filter(
+                    latitude__gte=near_lat - lat_degree_radius,
+                    latitude__lte=near_lat + lat_degree_radius,
+                    longitude__gte=near_lon - lon_degree_radius,
+                    longitude__lte=near_lon + lon_degree_radius
                 )
-            except (ValueError, TypeError):
+
+                # Then filter by actual circular distance using raw SQL
+                # Haversine formula for accurate distance calculation
+                return bbox_queryset.extra(
+                    where=["""
+                        6371 * acos(
+                            cos(radians(%s)) * cos(radians(latitude)) * 
+                            cos(radians(longitude) - radians(%s)) + 
+                            sin(radians(%s)) * sin(radians(latitude))
+                        ) <= %s
+                    """],
+                    params=[near_lat, near_lon, near_lat, radius_km]
+                )
+                
+            except (ValueError, TypeError, ZeroDivisionError):
                 pass
 
         return queryset
-
+    
     def filter_by_availability(self, queryset, name, value):
         """Filter trips by availability (i.e., if there are available seats)"""
         if value is True:
