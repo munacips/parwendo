@@ -8,7 +8,7 @@ class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ['id', 'username', 'email', 'first_name',
-                  'last_name', 'phone', 'is_driver','profile_picture', 'password', 'is_private']
+                  'last_name', 'phone', 'is_driver', 'profile_picture', 'password', 'is_private']
 
     def create(self, validated_data):
         password = validated_data.pop('password')
@@ -25,7 +25,7 @@ class DriverProfileSerializer(serializers.ModelSerializer):
         model = DriverProfile
         fields = ['id', 'user', 'license_number', 'national_id_number',
                   'license_upload', 'national_id_upload', 'verification_status']
-        
+
 
 class CreateDriverProfileSerializer(serializers.ModelSerializer):
     user = serializers.PrimaryKeyRelatedField(read_only=True)
@@ -48,11 +48,10 @@ class VehicleSerializer(serializers.ModelSerializer):
         model = Vehicle
         fields = ['id', 'driver', 'vehicle_number', 'vehicle_type', 'vehicle_make',
                   'vehicle_model', 'vehicle_color', 'vehicle_year', 'vehicle_capacity', 'vehicle_description', 'vehicle_picture']
-        
+
 
 class CreateVehicleSerializer(serializers.ModelSerializer):
     driver = serializers.PrimaryKeyRelatedField(read_only=True)
-
 
     class Meta:
         model = Vehicle
@@ -69,7 +68,8 @@ class TripSerializer(serializers.ModelSerializer):
     vehicle = VehicleSerializer()
     driver_name = serializers.SerializerMethodField()
     vehicle_name = serializers.SerializerMethodField()
-    vehicle_picture = serializers.ImageField(source='vehicle.vehicle_picture', read_only=True)  
+    vehicle_picture = serializers.ImageField(
+        source='vehicle.vehicle_picture', read_only=True)
 
     class Meta:
         model = Trip
@@ -78,17 +78,17 @@ class TripSerializer(serializers.ModelSerializer):
 
     def get_driver_name(self, obj):
         return obj.driver.user.first_name + ' ' + obj.driver.user.last_name if obj.driver and obj.driver.user else None
-    
+
     def get_vehicle_name(self, obj):
         return f"{obj.vehicle.vehicle_color} {obj.vehicle.vehicle_make} {obj.vehicle.vehicle_model} - {obj.vehicle.vehicle_number}" if obj.vehicle else None
-    
+
 
 class TripCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Trip
         fields = ['driver', 'destination', 'start_location', 'vehicle',
-                  'start_time', 'estimated_end_time', 'available_seats', 'price_per_seat']
-        
+                  'start_time', 'estimated_end_time', 'available_seats', 'price_per_seat', 'start_x_coordinates', 'start_y_coordinates', 'destination_x_coordinates', 'destination_y_coordinates']
+
     def create(self, validated_data):
         # Ensure the driver is set to the current user from context
         validated_data['driver'] = self.context['request'].user.driver_profile
@@ -109,7 +109,7 @@ class BookingCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Booking
         fields = ['trip', 'number_of_seats']
-        
+
     def create(self, validated_data):
         # Set the passenger to the current user from context
         validated_data['passenger'] = self.context['request'].user
@@ -130,7 +130,7 @@ class ChatThreadSerializer(serializers.ModelSerializer):
 class CreateThreadSerializer(serializers.ModelSerializer):
     class Meta:
         model = ChatThread
-        fields = ['id','trip', 'passenger', 'driver']
+        fields = ['id', 'trip', 'passenger', 'driver']
 
 
 class ChatMessageSerializer(serializers.ModelSerializer):
@@ -139,14 +139,15 @@ class ChatMessageSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ChatMessage
-        fields = ['id', 'thread', 'sender', 'message', 'timestamp']
+        fields = ['id', 'thread', 'sender',
+                  'message', 'timestamp', 'is_location']
         read_only_fields = ['timestamp']
 
 
 class ChatCreateMessageSerializer(serializers.ModelSerializer):
     class Meta:
         model = ChatMessage
-        fields = ['thread', 'sender', 'message']
+        fields = ['thread', 'sender', 'message', 'is_location']
 
     def create(self, validated_data):
         # Set the sender to the current user from context
@@ -161,8 +162,10 @@ class UserStatisticsSerializer(serializers.Serializer):
     cancelled_bookings = serializers.IntegerField()
     total_trips = serializers.IntegerField()
     completed_trips = serializers.IntegerField()
-    total_amount_spent = serializers.DecimalField(max_digits=10, decimal_places=2)
-    total_amount_earned = serializers.DecimalField(max_digits=10, decimal_places=2)
+    total_amount_spent = serializers.DecimalField(
+        max_digits=10, decimal_places=2)
+    total_amount_earned = serializers.DecimalField(
+        max_digits=10, decimal_places=2)
 
 
 class UserReportSerializer(serializers.ModelSerializer):
@@ -170,7 +173,8 @@ class UserReportSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = UserReport
-        fields = ['id', 'user','reason', 'reported_user','created_at', 'is_resolved','chat_thread']
+        fields = ['id', 'user', 'reason', 'reported_user',
+                  'created_at', 'is_resolved', 'chat_thread']
 
 
 class UserReportCreateSerializer(serializers.ModelSerializer):
@@ -183,7 +187,7 @@ class UserReportCreateSerializer(serializers.ModelSerializer):
         # Set the user to the current user from context
         validated_data['user'] = self.context['request'].user
         return super().create(validated_data)
-    
+
 
 class ReviewSerializer(serializers.ModelSerializer):
     trip = TripSerializer()
@@ -203,5 +207,3 @@ class CreateReviewSerializer(serializers.ModelSerializer):
         # Set the reviewer to the current user from context
         validated_data['reviewer'] = self.context['request'].user
         return super().create(validated_data)
-    
-    

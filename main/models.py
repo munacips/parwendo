@@ -124,6 +124,7 @@ class ChatMessage(models.Model):
     message = models.TextField()
     timestamp = models.DateTimeField(auto_now_add=True)
     is_read = models.BooleanField(default=False)
+    is_location = models.BooleanField(default=False)
 
     class Meta:
         ordering = ['timestamp']
@@ -172,7 +173,8 @@ class UserReport(models.Model):
 
 
 class OTP(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='otps')
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name='otps')
     code = models.CharField(max_length=6)
     expires_at = models.DateTimeField()
 
@@ -201,4 +203,16 @@ class Review(models.Model):
 
     def __str__(self):
         return f"Review by {self.reviewer.username} for trip {self.trip.id}"
-    
+
+
+class PaymentTransaction(models.Model):
+    reference = models.CharField(max_length=255,unique=True)
+    email = models.EmailField()
+    method = models.CharField(max_length=50)
+    phone = models.CharField(max_length=50, blank=True,null=True)
+    amount = models.DecimalField(max_digits=12,decimal_places=2)
+    poll_url = models.TextField(blank=True,null=True)
+    redirect_url = models.TextField(blank=True,null=True)
+    status = models.CharField(max_length=50,default="Initiated")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
