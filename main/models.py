@@ -206,6 +206,7 @@ class Review(models.Model):
 
 
 class PaymentTransaction(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
     reference = models.CharField(max_length=255,unique=True)
     email = models.EmailField()
     method = models.CharField(max_length=50)

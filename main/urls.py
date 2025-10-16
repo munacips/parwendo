@@ -3,6 +3,8 @@ from django.urls import path
 
 
 urlpatterns = [
+    path('register_fcm_token/', views.register_fcm_token,
+         name='register_fcm_token'),
     path('verify_otp/', views.verify_otp, name='verify_otp'),
     path('get_token_from_oauth/', views.get_token_from_oauth,
          name='get_token_from_oauth'),
@@ -28,8 +30,6 @@ urlpatterns = [
     path('user_reports/<int:id>/', views.user_report_details,
          name='user_report_details'),
     path('resend_otp/', views.resend_otp, name='resend_otp'),
-    path('register_fcm_token/', views.register_fcm_token,
-         name='register_fcm_token'),
     path('debug_time/', views.debug_time, name='debug_time'),
     path('reviews/', views.reviews, name='reviews'),
     path('reviews/<int:id>/', views.review_details, name='review_details'),
@@ -39,7 +39,8 @@ urlpatterns = [
          views.zipit_payment_page, name='zipit_payment_page'),
     path('zipit_payment/result/', views.zipit_payment_result,
          name='zipit_payment_result'),
-    path('paynow_initiate/',views.initiate_payment,name="Initiate payment"),
-    path('paynow_result/',views.paynow_result,name="Paynow Result"),
-    path('paynow_return/',views.paynow_return,name="Paynow return")
+    path('paynow_initiate/', views.initiate_payment, name="Initiate payment"),
+    path('paynow_result/', views.paynow_result, name="Paynow Result"),
+    path('paynow_return/', views.paynow_return, name="Paynow return"),
+    path('paynow_payment_status/', views.payment_status, name="Paynow payment status"),
 ]

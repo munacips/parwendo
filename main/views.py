@@ -34,11 +34,15 @@ load_dotenv(os.path.join(BASE_DIR, '.env'))
 
 # Initialise Paynow
 PAYNOW = Paynow(
-    integration_id= os.getenv("PAYNOW_INTEGRATION_ID"),
-    integration_key= os.getenv("PAYNOW_INTEGRATION_KEY"),
-    result_url="https://127.0.0.1/api/v1/paynow_result",
-    return_url="https://127.0.0.1/api/v1/paynow_return",
+    integration_id=os.getenv("PAYNOW_INTEGRATION_ID"),
+    integration_key=os.getenv("PAYNOW_INTEGRATION_KEY"),
+    # "https://172.19.16.1/api/v1/paynow_result",
+    result_url='https://angela-gloomiest-unphilosophically.ngrok-free.dev',
+    # "https://172.19.16.1/api/v1/paynow_return",
+    return_url='https://angela-gloomiest-unphilosophically.ngrok-free.dev',
 )
+
+PAYNOW.sandbox = True  # Set to False in production
 
 
 # ========== FILTERS ==========
@@ -334,6 +338,7 @@ def delete_object(model, pk):
 def get_token_from_oauth(request):
     username = request.POST.get('username') or request.data.get('username')
     password = request.POST.get('password') or request.data.get('password')
+    print(f"Getting  token from oauth for user , ", username)
 
     if not username or not password:
         return Response({'error': 'Username and password are required'}, status=400)
@@ -865,6 +870,8 @@ def zipit_payment_result(request):
 
 
 @csrf_exempt
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
 def initiate_payment(request):
     """
     Expected POST JSON body:
@@ -877,13 +884,9 @@ def initiate_payment(request):
     "description": "Payment for order 123"
     }
     """
-    if request.method != "POST":
-        return HttpResponseBadRequest("Only POST allowed")
-    try:
-        payload = json.loads(request.body.decode("utf-8"))
-    except json.JSONDecodeError:
-        return HttpResponseBadRequest("Invalid JSON")
-    
+
+    payload = request.data
+
     # Extract fields (you should validate these)
     amount = payload.get("amount")
     method = payload.get("method")
@@ -891,6 +894,8 @@ def initiate_payment(request):
     email = payload.get("email")
     reference = payload.get("reference")
     description = payload.get("description") or "Payment"
+
+    user = User.objects.get(id=request.user.id)
 
     if not (amount and method and reference and email):
         return HttpResponseBadRequest("Missing required fields")
@@ -910,6 +915,7 @@ def initiate_payment(request):
     # Model PaymentTransaction can store: reference, method, phone, email,
     # poll_url, status (initial, pending), any redirect_url, etc.
     tx = PaymentTransaction.objects.create(
+        user=user,
         reference=reference,
         email=email,
         method=method.lower(),
@@ -920,13 +926,26 @@ def initiate_payment(request):
         redirect_url=response.redirect_url if hasattr(
             response, "redirect_url") else None,
     )
-    # Return details to frontend
+    # Return details to frontend (ensure all fields are JSON serializable)
+
+    def safe_get(obj, attr, default=None):
+        value = getattr(obj, attr, default)
+        # If value is a method or type, skip it
+        if callable(value) or isinstance(value, type):
+            return default
+        return value
+
     result = {
-        "success": response.success,
-        "redirect_url": getattr(response, "redirect_url", None),
-        "poll_url": getattr(response, "poll_url", None),
-        "instructions": getattr(response, "instructions", None),
+        "success": bool(safe_get(response, "success", False)),
+        "redirect_url": safe_get(response, "redirect_url"),
+        "poll_url": safe_get(response, "poll_url"),
+        "instructions": safe_get(response, "instructions"),
     }
+    # Optionally, print only serializable dict for debugging
+    try:
+        print({k: v for k, v in result.items()})
+    except Exception:
+        pass
     return JsonResponse(result)
 
 
@@ -942,23 +961,24 @@ def payment_status(request):
     """
     if request.method != "POST":
         return HttpResponseBadRequest("Only POST")
-    
+
     try:
         payload = json.loads(request.body.decode("utf-8"))
     except:
         return HttpResponseBadRequest("Bad JSON")
-    
+
     poll_url = payload.get("poll_url")
     reference = payload.get("reference")
     if not (poll_url and reference):
         return HttpResponseBadRequest("Missing fields")
-    
+
     # Find our transaction
     try:
-        tx = PaymentTransaction.objects.get(reference=reference, poll_url=poll_url)
+        tx = PaymentTransaction.objects.get(
+            reference=reference, poll_url=poll_url)
     except PaymentTransaction.DoesNotExist:
         return HttpResponseBadRequest("Transaction not found")
-    
+
     # Check status from Paynow
     status = PAYNOW.check_transaction_status(poll_url)
     # status will have properties like .paid, .status (string) etc.
@@ -968,7 +988,7 @@ def payment_status(request):
     else:
         tx.status = status.status or "unknown"
     tx.save()
-    
+
     return JsonResponse({
         "reference": reference,
         "status": tx.status,
@@ -980,7 +1000,7 @@ def paynow_result(request):
     Paynow sends a server to server POST here when payment is complete
     """
     if request.method == "POST":
-        #Paynow sends reference, status and amount
+        # Paynow sends reference, status and amount
         data = request.POST
         reference = data.get("reference")
         status = data.get("status")
@@ -1002,6 +1022,7 @@ def paynow_return(request):
     reference = request.GET.get("reference")
     status = request.GEt.get("status")
     return HttpResponse(f"{status}")
+
 
 def debug_time(request):
     return JsonResponse({
