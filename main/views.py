@@ -9,6 +9,7 @@ from .serializers import UserReportCreateSerializer, UserReportSerializer, ChatC
 import django_filters
 from rest_framework.pagination import PageNumberPagination
 import os
+import math
 import requests
 from dotenv import load_dotenv
 from pathlib import Path
@@ -36,10 +37,8 @@ load_dotenv(os.path.join(BASE_DIR, '.env'))
 PAYNOW = Paynow(
     integration_id=os.getenv("PAYNOW_INTEGRATION_ID"),
     integration_key=os.getenv("PAYNOW_INTEGRATION_KEY"),
-    # "https://172.19.16.1/api/v1/paynow_result",
-    result_url='https://angela-gloomiest-unphilosophically.ngrok-free.dev',
-    # "https://172.19.16.1/api/v1/paynow_return",
-    return_url='https://angela-gloomiest-unphilosophically.ngrok-free.dev',
+    result_url='https://parwendo-eqps.onrender.com/api/v1/paynow_result',
+    return_url='https://parwendo-eqps.onrender.com/api/v1/paynow_return',
 )
 
 PAYNOW.sandbox = True  # Set to False in production
