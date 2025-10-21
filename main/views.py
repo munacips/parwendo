@@ -364,6 +364,7 @@ def get_token_from_oauth(request):
         user = User.objects.get(username=username)
         token_data['user_id'] = user.id
         token_data['username'] = username
+        token_data['email'] = user.email
 
         return Response(token_data, status=200)
     else:
@@ -744,8 +745,47 @@ def resend_otp(request):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def register_fcm_token(request):
-    token = request.data.get('token')
-    user_id = request.data.get('user_id')
+    print("[DEBUG] /register_fcm_token/ called")
+    print("[DEBUG] Headers:", dict(request.headers))
+    # Avoid accessing request.body directly (DRF already consumed it).
+    # Use request.data which is safe and works with parsed JSON/form bodies.
+    try:
+        body_data = request.data
+    except Exception:
+        body_data = {}
+
+    print("[DEBUG] Body data:", body_data)
+    print("[DEBUG] User:", request.user)
+    print("[DEBUG] Authenticated:", getattr(request.user, 'is_authenticated', False))
+
+    token = body_data.get('token')
+    user_id = body_data.get('user_id')
+
+    if not token:
+        return JsonResponse({'error': 'token is required'}, status=400)
+
+    # Resolve user: prefer passed user_id, else use authenticated user
+    user = None
+    if user_id:
+        try:
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return JsonResponse({'error': 'user_id not found'}, status=404)
+    else:
+        if request.user and getattr(request.user, 'is_authenticated', False):
+            user = request.user
+
+    # Create or update FCMDevice
+    try:
+        device, created = FCMDevice.objects.update_or_create(
+            token=token,
+            defaults={'user': user} if user else {},
+        )
+    except Exception as e:
+        print("[ERROR] saving FCMDevice:", e)
+        return JsonResponse({'error': 'failed to save token'}, status=500)
+
+    return JsonResponse({'token': device.token, 'created': created}, status=201 if created else 200)
     try:
         user = User.objects.get(id=user_id)
     except User.DoesNotExist:
