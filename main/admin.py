@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import User, DriverProfile, Vehicle, Trip, Booking, ChatThread, ChatMessage, UserReport, FCMDevice, Review
+from .models import User, DriverProfile, Vehicle, Trip, Booking, ChatThread, ChatMessage, UserReport, FCMDevice, Review, PaymentTransaction
 from django.http import HttpResponseRedirect
 from django.contrib import messages
 from django.utils.html import format_html
@@ -7,7 +7,6 @@ import os
 from django.urls import reverse
 from firebase_admin import messaging
 from django.contrib.admin.models import LogEntry
-
 
 
 def send_push_notification(token, title, body, data=None):
@@ -24,7 +23,7 @@ def send_push_notification(token, title, body, data=None):
 
 
 admin.site.register([Trip,
-                    Booking, ChatThread, ChatMessage, FCMDevice, Review])
+                    Booking, ChatThread, ChatMessage, FCMDevice, Review, PaymentTransaction])
 
 
 def get_file_preview(file_field, title):
@@ -93,7 +92,7 @@ def get_file_preview(file_field, title):
 class CustomUserAdmin(admin.ModelAdmin):
     def get_fieldsets(self, request, obj=None):
         fieldsets = super().get_fieldsets(request, obj)
-        
+
         # Only show permissions to superusers
         if not request.user.is_superuser:
             # Create a new fieldsets tuple without permissions
@@ -106,25 +105,27 @@ class CustomUserAdmin(admin.ModelAdmin):
                     # This is usually the first fieldset, check if it contains permission fields
                     fields = options['fields']
                     filtered_fields = [
-                        field for field in fields 
+                        field for field in fields
                         if field not in ['user_permissions', 'groups', 'is_superuser']
                     ]
                     if filtered_fields:  # Only include if there are remaining fields
-                        new_fieldsets.append((name, {**options, 'fields': filtered_fields}))
+                        new_fieldsets.append(
+                            (name, {**options, 'fields': filtered_fields}))
                 else:
                     new_fieldsets.append((name, options))
-            
+
             fieldsets = tuple(new_fieldsets)
-        
+
         return fieldsets
-    
+
     def get_readonly_fields(self, request, obj=None):
         readonly_fields = list(super().get_readonly_fields(request, obj))
-        
+
         # Make permissions read-only for non-superusers (as backup)
         if not request.user.is_superuser:
-            readonly_fields.extend(['user_permissions', 'groups', 'is_superuser'])
-        
+            readonly_fields.extend(
+                ['user_permissions', 'groups', 'is_superuser'])
+
         return readonly_fields
 
     def has_change_permission(self, request, obj=None):
@@ -134,7 +135,9 @@ class CustomUserAdmin(admin.ModelAdmin):
     def has_view_permission(self, request, obj=None):
         return request.user.is_staff
 
+
 admin.site.register(User, CustomUserAdmin)
+
 
 @admin.register(Vehicle)
 class VehicleAdmin(admin.ModelAdmin):
@@ -259,7 +262,7 @@ class UserReportAdmin(admin.ModelAdmin):
             user.is_active = False
             user.save()
             obj.is_resolved = True
-            
+
             # Send notification to the driver
             fcm_tokens = FCMDevice.objects.filter(
                 user=user).values_list('token', flat=True)
@@ -271,13 +274,13 @@ class UserReportAdmin(admin.ModelAdmin):
                 request, f"User '{user.username}' has been blocked.", messages.WARNING
             )
             return HttpResponseRedirect(".")
-        
+
         if "_unblock_user" in request.POST:
             user = obj.reported_user
             user.is_active = True
             user.save()
             obj.is_resolved = True
-            
+
             # Send notification to the driver
             fcm_tokens = FCMDevice.objects.filter(
                 user=user).values_list('token', flat=True)
@@ -307,13 +310,14 @@ class UserReportAdmin(admin.ModelAdmin):
                 self.message_user(
                     request, "No more unresolved user reports.", messages.INFO)
                 return HttpResponseRedirect(".")
-            
+
         return super().response_change(request, obj)
 
 
 class LogEntryAdmin(admin.ModelAdmin):
     readonly_fields = [f.name for f in LogEntry._meta.fields]
-    list_display = ['action_time', 'user', 'content_type', 'object_repr', 'action_flag', 'change_message']
+    list_display = ['action_time', 'user', 'content_type',
+                    'object_repr', 'action_flag', 'change_message']
     list_filter = ['user', 'content_type', 'action_flag']
     search_fields = ['object_repr', 'change_message']
 
@@ -325,5 +329,6 @@ class LogEntryAdmin(admin.ModelAdmin):
 
     def has_change_permission(self, request, obj=None):
         return False
+
 
 admin.site.register(LogEntry, LogEntryAdmin)

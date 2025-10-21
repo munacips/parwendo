@@ -1,15 +1,15 @@
 from django.db.models import Count, Sum, Q
-from django.shortcuts import get_object_or_404
+from django.shortcuts import get_object_or_404, render
 from rest_framework.decorators import api_view, permission_classes, authentication_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework import status
-from .models import User, DriverProfile, FCMDevice, Vehicle, Trip, Booking, ChatThread, ChatMessage, UserReport, OTP, FCMDevice, Review
+from .models import PaymentTransaction, User, DriverProfile, FCMDevice, Vehicle, Trip, Booking, ChatThread, ChatMessage, UserReport, OTP, FCMDevice, Review
 from .serializers import UserReportCreateSerializer, UserReportSerializer, ChatCreateMessageSerializer, CreateThreadSerializer, UserStatisticsSerializer, CreateVehicleSerializer, UserSerializer, TripCreateSerializer, BookingCreateSerializer, CreateDriverProfileSerializer, DriverProfileSerializer, VehicleSerializer, TripSerializer, BookingSerializer, ChatThreadSerializer, ChatMessageSerializer, ReviewSerializer, CreateReviewSerializer
 import django_filters
 from rest_framework.pagination import PageNumberPagination
 import os
-import math
+import requests
 from dotenv import load_dotenv
 from pathlib import Path
 from django.views.decorators.csrf import csrf_exempt
@@ -23,13 +23,27 @@ from django.http import Http404, FileResponse
 from django.conf import settings
 import firebase_admin
 from firebase_admin import credentials, messaging
-from django.http import HttpRequest
+from django.http import HttpRequest, JsonResponse, HttpResponseBadRequest, HttpResponse
 from oauth2_provider.views.base import TokenView
-from django.http import JsonResponse
+import json
+from paynow import Paynow
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(os.path.join(BASE_DIR, '.env'))
+
+# Initialise Paynow
+PAYNOW = Paynow(
+    integration_id=os.getenv("PAYNOW_INTEGRATION_ID"),
+    integration_key=os.getenv("PAYNOW_INTEGRATION_KEY"),
+    # "https://172.19.16.1/api/v1/paynow_result",
+    result_url='https://angela-gloomiest-unphilosophically.ngrok-free.dev',
+    # "https://172.19.16.1/api/v1/paynow_return",
+    return_url='https://angela-gloomiest-unphilosophically.ngrok-free.dev',
+)
+
+PAYNOW.sandbox = True  # Set to False in production
+
 
 # ========== FILTERS ==========
 
@@ -285,14 +299,18 @@ def pdf_viewer(request, file_path):
 
 
 def send_push_notification(token, title, body, data=None):
+    # Ensure all values in data are strings
+    if data:
+        data = {str(k): str(v) for k, v in data.items()}
+    else:
+        data = {}
     message = messaging.Message(
         token=token,
         notification=messaging.Notification(
             title=title,
             body=body
         ),
-        data=data or {}
-
+        data=data
     )
     response = messaging.send(message)
 
@@ -340,6 +358,7 @@ def delete_object(model, pk):
 def get_token_from_oauth(request):
     username = request.POST.get('username') or request.data.get('username')
     password = request.POST.get('password') or request.data.get('password')
+    print(f"Getting  token from oauth for user , ", username)
 
     if not username or not password:
         return Response({'error': 'Username and password are required'}, status=400)
@@ -365,6 +384,7 @@ def get_token_from_oauth(request):
         user = User.objects.get(username=username)
         token_data['user_id'] = user.id
         token_data['username'] = username
+        token_data['email'] = user.email
 
         return Response(token_data, status=200)
     else:
@@ -418,7 +438,8 @@ def users(request):
     if request.method == 'GET':
         return apply_filter_and_respond(User, UserFilter, UserSerializer, request)
 
-    serializer = UserSerializer(data=request.data, context={'request': request})
+    serializer = UserSerializer(
+        data=request.data, context={'request': request})
     if not serializer.is_valid():
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -535,24 +556,27 @@ def bookings(request):
     serializer = BookingCreateSerializer(
         data=data, context={'request': request})
     if serializer.is_valid():
-        serializer.save()
+        booking = serializer.save()
+
+        # Serialize the created booking to get all fields
+        booking_data = BookingSerializer(booking).data
 
         # Send notification to the driver
-        trip = Trip.objects.get(id=data["trip"])
-        driver = User.objects.get(id=trip.driver)
-        passenger = User.objects.get(id=serializer.data['passenger'])
+        trip = booking.trip
+        driver = trip.driver.user
+        passenger = booking.passenger
 
         fcm_tokens = FCMDevice.objects.filter(
             user=driver).values_list('token', flat=True)
-        data = {
-            "booking_id": serializer.data['id'],
+        notification_data = {
+            "booking_id": booking_data['id'],
             "screen": "booking",
         }
         for token in fcm_tokens:
             send_push_notification(
-                token, "New Booking", "You have recieved a new booking from " + passenger.username, data)
+                token, "New Booking", "You have received a new booking from " + passenger.username, notification_data)
 
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(booking_data, status=status.HTTP_201_CREATED)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -642,7 +666,7 @@ def chat_messages(request):
             other_user = passenger.username
         else:
             user = passenger
-            other_user = driver.username
+            other_user = driver.user.username
         fcm_tokens = FCMDevice.objects.filter(
             user=user).values_list('token', flat=True)
         data = {
@@ -741,9 +765,51 @@ def resend_otp(request):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def register_fcm_token(request):
-    token = request.data.get('token')
-    user_id = request.data.get('user_id')
-    user = User.objects.get(id=user_id)
+    print("[DEBUG] /register_fcm_token/ called")
+    print("[DEBUG] Headers:", dict(request.headers))
+    # Avoid accessing request.body directly (DRF already consumed it).
+    # Use request.data which is safe and works with parsed JSON/form bodies.
+    try:
+        body_data = request.data
+    except Exception:
+        body_data = {}
+
+    print("[DEBUG] Body data:", body_data)
+    print("[DEBUG] User:", request.user)
+    print("[DEBUG] Authenticated:", getattr(request.user, 'is_authenticated', False))
+
+    token = body_data.get('token')
+    user_id = body_data.get('user_id')
+
+    if not token:
+        return JsonResponse({'error': 'token is required'}, status=400)
+
+    # Resolve user: prefer passed user_id, else use authenticated user
+    user = None
+    if user_id:
+        try:
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return JsonResponse({'error': 'user_id not found'}, status=404)
+    else:
+        if request.user and getattr(request.user, 'is_authenticated', False):
+            user = request.user
+
+    # Create or update FCMDevice
+    try:
+        device, created = FCMDevice.objects.update_or_create(
+            token=token,
+            defaults={'user': user} if user else {},
+        )
+    except Exception as e:
+        print("[ERROR] saving FCMDevice:", e)
+        return JsonResponse({'error': 'failed to save token'}, status=500)
+
+    return JsonResponse({'token': device.token, 'created': created}, status=201 if created else 200)
+    try:
+        user = User.objects.get(id=user_id)
+    except User.DoesNotExist:
+        return Response({"error": "User not found"}, status=404)
     if token:
         FCMDevice.objects.update_or_create(
             user=user,
@@ -771,6 +837,251 @@ def review_details(request, id):
     elif request.method == 'PATCH':
         return update_object(request, Review, id, ReviewSerializer)
     return delete_object(Review, id)
+
+
+@csrf_exempt
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def zipit_create_checkout(request):
+    """
+    Calls the OPPWA checkout API and returns the response.
+    """
+
+    url = "https://eu-test.oppwa.com/v1/checkouts"
+
+    entityId = request.data.get("entityId")
+    amount = request.data.get("amount")
+    currency = request.data.get("currency")
+    paymentType = request.data.get("paymentType")
+    integrity = request.data.get("integrity")
+
+    payload = {
+        "entityId": entityId or "8a8294174b7ecb28014b9699220015ca",
+        "amount": amount,
+        "currency": currency,
+        "paymentType":  paymentType or "DB",
+        "integrity": integrity or "true"
+    }
+
+    headers = {
+        "Authorization": "Bearer OGFjN2E0Yzc5Mzk0YmRjODAxOTM5NzM2ZjFhNzA2NDF8enlac1lYckc4QXk6bjYzI1NHNng="
+    }
+
+    try:
+        res = requests.post(url, data=payload, headers=headers)
+        res.raise_for_status()  # raises HTTPError for 4xx/5xx
+        return Response(res.json(), status=res.status_code)
+
+    except requests.exceptions.HTTPError as http_err:
+        return Response(
+            {"error": str(http_err), "details": res.text},
+            status=res.status_code if res else status.HTTP_502_BAD_GATEWAY
+        )
+    except Exception as e:
+        return Response(
+            {"error": str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@csrf_exempt
+@permission_classes([IsAuthenticated])
+def zipit_payment_page(request, checkout_id):
+    shopper_result_url = request.build_absolute_uri(
+        "/api/v1/zipit_payment/result/")
+    return render(request, "main/payment.html", {
+        "checkoutId": checkout_id,
+        "shopperResultUrl": shopper_result_url
+    })
+
+
+def zipit_payment_result(request):
+    resource_path = request.GET.get("resourcePath")
+    if not resource_path:
+        return JsonResponse({"error": "Missing resourcePath"}, status=400)
+
+    url = f"https://eu-test.oppwa.com{resource_path}"
+    headers = {
+        "Authorization": "Bearer YOUR_KEY"
+    }
+
+    res = requests.get(url, headers=headers)
+    result = res.json()
+
+    # Update your DB here (mark order as paid, etc.)
+
+    # Send Notification to user
+    user_id = result.get("customer", {}).get("id")
+    if user_id:
+        try:
+            user = User.objects.get(id=user_id)
+            fcm_tokens = FCMDevice.objects.filter(
+                user=user).values_list('token', flat=True)
+            data = {
+                "screen": "payments",
+            }
+            for token in fcm_tokens:
+                send_push_notification(
+                    token, "Payment Successful", "Your payment was successful!", data)
+        except User.DoesNotExist:
+            pass
+
+    return JsonResponse(result)
+
+
+@csrf_exempt
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def initiate_payment(request):
+    """
+    Expected POST JSON body:
+    {
+    "amount": 10.50,
+    "method": "ecocash", # or "onemoney", "vmc", etc.
+    "phone": "0777xxxxxx", # for mobile methods
+    "email": "user@example.com",
+    "reference": "ORDER123",
+    "description": "Payment for order 123"
+    }
+    """
+
+    payload = request.data
+
+    # Extract fields (you should validate these)
+    amount = payload.get("amount")
+    method = payload.get("method")
+    phone = payload.get("phone")
+    email = payload.get("email")
+    reference = payload.get("reference")
+    description = payload.get("description") or "Payment"
+
+    user = User.objects.get(id=request.user.id)
+
+    if not (amount and method and reference and email):
+        return HttpResponseBadRequest("Missing required fields")
+
+    # Create Paynow payment object
+    payment = PAYNOW.create_payment(reference, email)
+    payment.add(description, amount)
+
+    # Depending on method, send mobile or normal
+    if method.lower() in ("ecocash", "onemoney"):
+        # mobile express checkout
+        response = PAYNOW.send_mobile(payment, phone, method.lower())
+    else:
+        # e.g. vmc, etc.
+        response = PAYNOW.send(payment)
+    # Save the transaction to DB
+    # Model PaymentTransaction can store: reference, method, phone, email,
+    # poll_url, status (initial, pending), any redirect_url, etc.
+    tx = PaymentTransaction.objects.create(
+        user=user,
+        reference=reference,
+        email=email,
+        method=method.lower(),
+        phone=phone,
+        amount=amount,
+        status="initiated",
+        poll_url=response.poll_url if hasattr(response, "poll_url") else None,
+        redirect_url=response.redirect_url if hasattr(
+            response, "redirect_url") else None,
+    )
+    # Return details to frontend (ensure all fields are JSON serializable)
+
+    def safe_get(obj, attr, default=None):
+        value = getattr(obj, attr, default)
+        # If value is a method or type, skip it
+        if callable(value) or isinstance(value, type):
+            return default
+        return value
+
+    result = {
+        "success": bool(safe_get(response, "success", False)),
+        "redirect_url": safe_get(response, "redirect_url"),
+        "poll_url": safe_get(response, "poll_url"),
+        "instructions": safe_get(response, "instructions"),
+    }
+    # Optionally, print only serializable dict for debugging
+    try:
+        print({k: v for k, v in result.items()})
+    except Exception:
+        pass
+    return JsonResponse(result)
+
+
+@csrf_exempt
+def payment_status(request):
+    """
+    Endpoint to be called by front-end or by your scheduled task to check status.
+    Expects POST JSON:
+    {
+    "poll_url": "...",
+    "reference": "ORDER123"
+    }
+    """
+    if request.method != "POST":
+        return HttpResponseBadRequest("Only POST")
+
+    try:
+        payload = json.loads(request.body.decode("utf-8"))
+    except:
+        return HttpResponseBadRequest("Bad JSON")
+
+    poll_url = payload.get("poll_url")
+    reference = payload.get("reference")
+    if not (poll_url and reference):
+        return HttpResponseBadRequest("Missing fields")
+
+    # Find our transaction
+    try:
+        tx = PaymentTransaction.objects.get(
+            reference=reference, poll_url=poll_url)
+    except PaymentTransaction.DoesNotExist:
+        return HttpResponseBadRequest("Transaction not found")
+
+    # Check status from Paynow
+    status = PAYNOW.check_transaction_status(poll_url)
+    # status will have properties like .paid, .status (string) etc.
+    # You can inspect its docs or print status to see possible attributes
+    if status.paid:
+        tx.status = "paid"
+    else:
+        tx.status = status.status or "unknown"
+    tx.save()
+
+    return JsonResponse({
+        "reference": reference,
+        "status": tx.status,
+    })
+
+
+def paynow_result(request):
+    """
+    Paynow sends a server to server POST here when payment is complete
+    """
+    if request.method == "POST":
+        # Paynow sends reference, status and amount
+        data = request.POST
+        reference = data.get("reference")
+        status = data.get("status")
+
+        try:
+            tx = PaymentTransaction.objects.get(reference=reference)
+            tx.status = status.lower()
+            tx.save()
+        except PaymentTransaction.DoesNotExist:
+            pass
+        return HttpResponse("OK")
+    return HttpResponse("Only POST allowed", status=405)
+
+
+def paynow_return(request):
+    """
+    User is redirected here after completing/cancelling payment. Shows a friendly message.
+    """
+    reference = request.GET.get("reference")
+    status = request.GEt.get("status")
+    return HttpResponse(f"{status}")
 
 
 def debug_time(request):

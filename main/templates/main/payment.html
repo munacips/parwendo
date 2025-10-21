@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Payment</title>
+  <script src="https://eu-test.oppwa.com/v1/paymentWidgets.js?checkoutId={{ checkoutId }}"
+          integrity="true"
+          crossorigin="anonymous"></script>
+</head>
+<body>
+  <form action="{{ shopperResultUrl }}"
+        class="paymentWidgets"
+        data-brands="VISA MASTER AMEX"></form>
+</body>
+</html>

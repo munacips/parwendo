@@ -5,6 +5,9 @@ main/*.pyd
 
 *.pyc
 
+manage.py
+parwendo/asgi.py
+parwendo/wsgi.py
 
 parwendo/__pycache__
 
