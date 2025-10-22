@@ -258,11 +258,6 @@ def get_and_respond(model, pk, serializer_class):
     return Response(serializer.data, status=status.HTTP_200_OK)
 
 
-def async_send_mail(*args, **kwargs):
-    """Run Django's send_mail in a background thread."""
-    threading.Thread(target=send_mail, args=args, kwargs=kwargs, daemon=True).start()
-
-
 def send_otp_to_user(user, code):
     email = getattr(user, 'email', None)
     phone = getattr(user, 'phone_number', None)
@@ -274,17 +269,18 @@ def send_otp_to_user(user, code):
         recipient_list = [email]
 
         try:
-            async_send_mail(subject, message, from_email, recipient_list)
-            print(f"OTP email send initiated for: {email}")
+            send_mail(subject, message, from_email, recipient_list)
+            print(f"OTP sent to email: {email}")
         except Exception as e:
-            print(f"Failed to send OTP email to {email}: {e}")
+            print(f"Failed to send email OTP to {email}: {e}")
 
     if phone:
-        # TODO: Implement SMS sending
+        # Send OTP via SMS
         pass
 
     if not email and not phone:
-        print(f"User {user.username} has no email or phone number to send OTP to.")
+        print(
+            f"User {user.username} has no email or phone number to send OTP to.")
 
 
 def generate_otp():
