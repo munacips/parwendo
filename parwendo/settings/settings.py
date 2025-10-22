@@ -246,7 +246,7 @@ OAUTH2_PROVIDER.update({
 # settings.py
 EMAIL_BACKEND = "sendgrid_backend.SendgridBackend"
 SENDGRID_API_KEY = os.getenv("SENDGRID_API_KEY")
-DEFAULT_FROM_EMAIL = "no-reply@yourapp.com"
+DEFAULT_FROM_EMAIL = "munacips@gmail.com"
 
 
 # Security settings
