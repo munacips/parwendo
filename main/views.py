@@ -28,7 +28,7 @@ from django.http import HttpRequest, JsonResponse, HttpResponseBadRequest, HttpR
 from oauth2_provider.views.base import TokenView
 import json
 from paynow import Paynow
-import threading
+from django.contrib.auth import get_user_model
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -358,7 +358,7 @@ def delete_object(model, pk):
 def get_token_from_oauth(request):
     username = request.POST.get('username') or request.data.get('username')
     password = request.POST.get('password') or request.data.get('password')
-    print(f"Getting  token from oauth for user , ", username)
+    print(f"Getting token from oauth for user: {username}")
 
     if not username or not password:
         return Response({'error': 'Username and password are required'}, status=400)
@@ -374,22 +374,38 @@ def get_token_from_oauth(request):
         "client_secret": os.getenv("CLIENT_SECRET"),
     }
 
+    # Call the token endpoint internally
     token_view = TokenView.as_view()
     response = token_view(oauth_request)
+
+    try:
+        response_data = json.loads(response.content)
+    except json.JSONDecodeError:
+        response_data = {}
+
     if response.status_code == 200:
-        import json
-        token_data = json.loads(response.content)
-        from django.contrib.auth import get_user_model
+        # Successful authentication
         User = get_user_model()
         user = User.objects.get(username=username)
-        token_data['user_id'] = user.id
-        token_data['username'] = username
-        token_data['email'] = user.email
+        response_data['user_id'] = user.id
+        response_data['username'] = username
+        response_data['email'] = user.email
+        return Response(response_data, status=200)
 
-        return Response(token_data, status=200)
+    elif response.status_code == 400 and response_data.get("error") == "invalid_grant":
+        # Wrong username or password
+        return Response({'error': 'Invalid username or password'}, status=401)
+
+    elif response.status_code == 401 and response_data.get("error") == "invalid_client":
+        # Invalid client credentials
+        return Response({'error': 'Invalid client credentials'}, status=401)
+
     else:
-        return Response({'error': 'Authentication failed', 'details': response.content.decode()}, status=response.status_code)
-
+        # Other possible OAuth errors
+        return Response({
+            'error': response_data.get('error', 'Authentication failed'),
+            'details': response_data.get('error_description', response.content.decode())
+        }, status=response.status_code)
 
 @csrf_exempt
 @api_view(['GET', 'POST'])
