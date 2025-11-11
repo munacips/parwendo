@@ -401,7 +401,6 @@ def get_token_from_oauth(request):
         return Response({'error': 'Invalid client credentials'}, status=401)
 
     else:
-        # Other possible OAuth errors
         return Response({
             'error': response_data.get('error', 'Authentication failed'),
             'details': response_data.get('error_description', response.content.decode())
