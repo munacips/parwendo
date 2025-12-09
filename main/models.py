@@ -89,7 +89,7 @@ class Booking(models.Model):
     total_price = models.DecimalField(max_digits=10, decimal_places=2)
     status = models.CharField(max_length=20, choices=[('pending', 'Pending'), (
         'confirmed', 'Confirmed'), ('cancelled', 'Cancelled'), ('rejected', 'Rejected')], default='pending')
-    code = models.IntegerField(max_digits=6,null=True,blank=True)
+    code = models.IntegerField(null=True, blank=True)
 
     class Meta:
         unique_together = ('trip', 'passenger')

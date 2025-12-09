@@ -810,22 +810,16 @@ def resend_otp(request):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def register_fcm_token(request):
-    print("[DEBUG] /register_fcm_token/ called")
-    print("[DEBUG] Headers:", dict(request.headers))
-    # Avoid accessing request.body directly (DRF already consumed it).
-    # Use request.data which is safe and works with parsed JSON/form bodies.
-    try:
-        body_data = request.data
-    except Exception:
-        body_data = {}
-
-    print("[DEBUG] Body data:", body_data)
-    print("[DEBUG] User:", request.user)
-    print("[DEBUG] Authenticated:", getattr(
-        request.user, 'is_authenticated', False))
-
-    token = body_data.get('token')
-    user_id = body_data.get('user_id')
+    token = request.data.get('token')
+    user_id = request.data.get('user_id')
+    user = User.objects.get(id=user_id)
+    if token:
+        FCMDevice.objects.update_or_create(
+            user=user,
+            defaults={'token': token}
+        )
+        return Response({"message": "FCM token registered successfully"}, status=200)
+    return Response({"error": "Token is required"}, status=400)
 
 
 @csrf_exempt
