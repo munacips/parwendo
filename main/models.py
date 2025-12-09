@@ -19,6 +19,7 @@ class DriverProfile(models.Model):
     national_id_number = models.CharField(max_length=20, unique=True)
     license_upload = models.FileField(
         upload_to='kyc/licenses/', blank=True, null=True)
+    license_upload_backside = models.FileField(upload_to='kyc/licenses/')
     national_id_upload = models.FileField(
         upload_to='kyc/national_ids/', blank=True, null=True)
     verification_status = models.CharField(max_length=20, choices=[(
@@ -88,6 +89,7 @@ class Booking(models.Model):
     total_price = models.DecimalField(max_digits=10, decimal_places=2)
     status = models.CharField(max_length=20, choices=[('pending', 'Pending'), (
         'confirmed', 'Confirmed'), ('cancelled', 'Cancelled'), ('rejected', 'Rejected')], default='pending')
+    code = models.IntegerField(max_digits=6,null=True,blank=True)
 
     class Meta:
         unique_together = ('trip', 'passenger')
@@ -207,13 +209,32 @@ class Review(models.Model):
 
 class PaymentTransaction(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
-    reference = models.CharField(max_length=255,unique=True)
+    reference = models.CharField(max_length=255, unique=True)
     email = models.EmailField()
     method = models.CharField(max_length=50)
-    phone = models.CharField(max_length=50, blank=True,null=True)
-    amount = models.DecimalField(max_digits=12,decimal_places=2)
-    poll_url = models.TextField(blank=True,null=True)
-    redirect_url = models.TextField(blank=True,null=True)
-    status = models.CharField(max_length=50,default="Initiated")
+    phone = models.CharField(max_length=50, blank=True, null=True)
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    poll_url = models.TextField(blank=True, null=True)
+    redirect_url = models.TextField(blank=True, null=True)
+    status = models.CharField(max_length=50, default="Initiated")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+
+class SOSAlert(models.Model):
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name='sos_alerts')
+    trip = models.ForeignKey(
+        Trip, on_delete=models.SET_NULL, null=True, blank=True, related_name='sos_alerts')
+    driver = models.ForeignKey(
+        DriverProfile, on_delete=models.SET_NULL, null=True, blank=True, related_name='sos_alerts_involved')
+    vehicle = models.ForeignKey(
+        Vehicle, on_delete=models.SET_NULL, null=True, blank=True, related_name='sos_alerts_involved')
+    location = models.CharField(max_length=255)
+    destination = models.CharField(max_length=255, blank=True, null=True)
+    source = models.CharField(max_length=255, blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    attended_to = models.BooleanField(default=False)
+
+    def __str__(self):
+        return f"SOS Alert by {self.user.username} at {self.created_at}"

@@ -42,5 +42,8 @@ urlpatterns = [
     path('paynow_initiate/', views.initiate_payment, name="Initiate payment"),
     path('paynow_result/', views.paynow_result, name="Paynow Result"),
     path('paynow_return/', views.paynow_return, name="Paynow return"),
-    path('paynow_payment_status/', views.payment_status, name="Paynow payment status"),
+    path('paynow_payment_status/', views.payment_status,
+         name="Paynow payment status"),
+    path('sos_alerts/', views.sos_alerts, name='sos_alerts'),
+    path('sos_alerts/<int:id>/', views.sos_alert_details, name='sos_alert_details'),
 ]

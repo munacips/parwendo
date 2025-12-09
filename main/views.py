@@ -4,8 +4,8 @@ from rest_framework.decorators import api_view, permission_classes, authenticati
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework import status
-from .models import PaymentTransaction, User, DriverProfile, FCMDevice, Vehicle, Trip, Booking, ChatThread, ChatMessage, UserReport, OTP, FCMDevice, Review
-from .serializers import UserReportCreateSerializer, UserReportSerializer, ChatCreateMessageSerializer, CreateThreadSerializer, UserStatisticsSerializer, CreateVehicleSerializer, UserSerializer, TripCreateSerializer, BookingCreateSerializer, CreateDriverProfileSerializer, DriverProfileSerializer, VehicleSerializer, TripSerializer, BookingSerializer, ChatThreadSerializer, ChatMessageSerializer, ReviewSerializer, CreateReviewSerializer
+from .models import PaymentTransaction, User, DriverProfile, FCMDevice, Vehicle, Trip, Booking, ChatThread, ChatMessage, UserReport, OTP, FCMDevice, Review, SOSAlert
+from .serializers import UserReportCreateSerializer, UserReportSerializer, ChatCreateMessageSerializer, CreateThreadSerializer, UserStatisticsSerializer, CreateVehicleSerializer, UserSerializer, TripCreateSerializer, BookingCreateSerializer, CreateDriverProfileSerializer, DriverProfileSerializer, VehicleSerializer, TripSerializer, BookingSerializer, ChatThreadSerializer, ChatMessageSerializer, ReviewSerializer, CreateReviewSerializer, SOSAlertSerializer, CreateSOSAlertSerializer
 import django_filters
 from rest_framework.pagination import PageNumberPagination
 import os
@@ -72,7 +72,7 @@ class TripFilter(django_filters.FilterSet):
         """
         Filter using improved geographic distance calculation
         Usage: ?near_lat=40.7128&near_lon=-74.0060&radius_km=1
-        
+
         Uses Haversine formula for more accurate distance on lat/lon coordinates
         """
         request = self.request
@@ -80,7 +80,7 @@ class TripFilter(django_filters.FilterSet):
             return queryset
 
         near_lat = request.GET.get('near_x')
-        near_lon = request.GET.get('near_y') 
+        near_lon = request.GET.get('near_y')
         radius_km = float(request.GET.get('radius_km', 1))
 
         if near_lat and near_lon:
@@ -91,9 +91,10 @@ class TripFilter(django_filters.FilterSet):
                 # More accurate bounding box calculation
                 # Latitude: 1 degree ≈ 111 km everywhere
                 lat_degree_radius = radius_km / 111.0
-                
+
                 # Longitude: varies by latitude
-                lon_degree_radius = radius_km / (111.0 * math.cos(math.radians(near_lat)))
+                lon_degree_radius = radius_km / \
+                    (111.0 * math.cos(math.radians(near_lat)))
 
                 # Filter by bounding box first (fast database operation)
                 bbox_queryset = queryset.filter(
@@ -115,12 +116,12 @@ class TripFilter(django_filters.FilterSet):
                     """],
                     params=[near_lat, near_lon, near_lat, radius_km]
                 )
-                
+
             except (ValueError, TypeError, ZeroDivisionError):
                 pass
 
         return queryset
-    
+
     def filter_by_availability(self, queryset, name, value):
         """Filter trips by availability (i.e., if there are available seats)"""
         if value is True:
@@ -232,6 +233,19 @@ class ReviewFilter(django_filters.FilterSet):
     class Meta:
         model = Review
         fields = ['trip', 'reviewer']
+
+
+class SOSAlertFilter(django_filters.FilterSet):
+    user = django_filters.NumberFilter(
+        field_name='user__id', lookup_expr='exact')
+    driver = django_filters.NumberFilter(
+        field_name='driver__id', lookup_expr='exact')
+    trip = django_filters.NumberFilter(
+        field_name='trip__id', lookup_expr='exact')
+
+    class Meta:
+        model = SOSAlert
+        fields = ['user', 'driver', 'trip']
 
 # ========== UTILS ==========
 
@@ -405,6 +419,7 @@ def get_token_from_oauth(request):
             'error': response_data.get('error', 'Authentication failed'),
             'details': response_data.get('error_description', response.content.decode())
         }, status=response.status_code)
+
 
 @csrf_exempt
 @api_view(['GET', 'POST'])
@@ -611,9 +626,24 @@ def booking_details(request, id):
             def handle_status(status):
                 match status:
                     case 'confirmed':
+                        # Generate and save confirmation code
+                        code = random.randint(100000, 999999)
+                        obj.code = code
+                        obj.save()
+
+                        # Notify Passenger
                         for token in fcm_tokens:
                             send_push_notification(
-                                token, "Booking Accepted", f"Your booking for the trip [{trip.start_location} -> {trip.destination}] has been accepted", data)
+                                token, "Booking Accepted", f"Your booking for the trip [{trip.start_location} -> {trip.destination}] has been accepted. Code: {code}", data)
+
+                        # Notify Driver
+                        driver_user = trip.driver.user
+                        driver_tokens = FCMDevice.objects.filter(
+                            user=driver_user).values_list('token', flat=True)
+                        for d_token in driver_tokens:
+                            send_push_notification(
+                                d_token, "Booking Confirmed", f"Booking confirmed for {passenger.username}. Code: {code}", data)
+
                         return
                     case 'rejected':
                         for token in fcm_tokens:
@@ -791,47 +821,65 @@ def register_fcm_token(request):
 
     print("[DEBUG] Body data:", body_data)
     print("[DEBUG] User:", request.user)
-    print("[DEBUG] Authenticated:", getattr(request.user, 'is_authenticated', False))
+    print("[DEBUG] Authenticated:", getattr(
+        request.user, 'is_authenticated', False))
 
     token = body_data.get('token')
     user_id = body_data.get('user_id')
 
-    if not token:
-        return JsonResponse({'error': 'token is required'}, status=400)
 
-    # Resolve user: prefer passed user_id, else use authenticated user
-    user = None
-    if user_id:
-        try:
-            user = User.objects.get(id=user_id)
-        except User.DoesNotExist:
-            return JsonResponse({'error': 'user_id not found'}, status=404)
-    else:
-        if request.user and getattr(request.user, 'is_authenticated', False):
-            user = request.user
+@csrf_exempt
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def sos_alerts(request):
+    if request.method == 'GET':
+        return apply_filter_and_respond(SOSAlert, SOSAlertFilter, SOSAlertSerializer, request)
+    return create_object(request, CreateSOSAlertSerializer)
 
-    # Create or update FCMDevice
-    try:
-        device, created = FCMDevice.objects.update_or_create(
-            token=token,
-            defaults={'user': user} if user else {},
-        )
-    except Exception as e:
-        print("[ERROR] saving FCMDevice:", e)
-        return JsonResponse({'error': 'failed to save token'}, status=500)
 
-    return JsonResponse({'token': device.token, 'created': created}, status=201 if created else 200)
-    try:
-        user = User.objects.get(id=user_id)
-    except User.DoesNotExist:
-        return Response({"error": "User not found"}, status=404)
-    if token:
-        FCMDevice.objects.update_or_create(
-            user=user,
-            defaults={'token': token}
-        )
-        return Response({"message": "FCM token registered successfully"}, status=200)
-    return Response({"error": "Token is required"}, status=400)
+@csrf_exempt
+@api_view(['GET', 'PATCH', 'DELETE'])
+@permission_classes([IsAuthenticated])
+def sos_alert_details(request, id):
+    if request.method == 'GET':
+        return get_and_respond(SOSAlert, id, SOSAlertSerializer)
+    elif request.method == 'PATCH':
+        return update_object(request, SOSAlert, id, SOSAlertSerializer)
+    return delete_object(SOSAlert, id)
+
+    # # Resolve user: prefer passed user_id, else use authenticated user
+    # user = None
+    # if user_id:
+    #     try:
+    #         user = User.objects.get(id=user_id)
+    #     except User.DoesNotExist:
+    #         return JsonResponse({'error': 'user_id not found'}, status=404)
+    # else:
+    #     if request.user and getattr(request.user, 'is_authenticated', False):
+    #         user = request.user
+
+    # # Create or update FCMDevice
+    # try:
+    #     device, created = FCMDevice.objects.update_or_create(
+    #         token=token,
+    #         defaults={'user': user} if user else {},
+    #     )
+    # except Exception as e:
+    #     print("[ERROR] saving FCMDevice:", e)
+    #     return JsonResponse({'error': 'failed to save token'}, status=500)
+
+    # return JsonResponse({'token': device.token, 'created': created}, status=201 if created else 200)
+    # try:
+    #     user = User.objects.get(id=user_id)
+    # except User.DoesNotExist:
+    #     return Response({"error": "User not found"}, status=404)
+    # if token:
+    #     FCMDevice.objects.update_or_create(
+    #         user=user,
+    #         defaults={'token': token}
+    #     )
+    #     return Response({"message": "FCM token registered successfully"}, status=200)
+    # return Response({"error": "Token is required"}, status=400)
 
 
 @csrf_exempt

@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Booking, ChatMessage, ChatThread, DriverProfile, Trip, User, Vehicle, UserReport, Review
+from .models import Booking, ChatMessage, ChatThread, DriverProfile, Trip, User, Vehicle, UserReport, Review, SOSAlert
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -24,7 +24,7 @@ class DriverProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = DriverProfile
         fields = ['id', 'user', 'license_number', 'national_id_number',
-                  'license_upload', 'national_id_upload', 'verification_status']
+                  'license_upload', 'license_upload_backside', 'national_id_upload', 'verification_status']
 
 
 class CreateDriverProfileSerializer(serializers.ModelSerializer):
@@ -33,7 +33,7 @@ class CreateDriverProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = DriverProfile
         fields = ['user', 'license_number', 'national_id_number',
-                  'license_upload', 'national_id_upload']
+                  'license_upload', 'license_upload_backside', 'national_id_upload']
 
     def create(self, validated_data):
         # Ensure the user is set to the current user from context
@@ -206,4 +206,33 @@ class CreateReviewSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         # Set the reviewer to the current user from context
         validated_data['reviewer'] = self.context['request'].user
+        return super().create(validated_data)
+
+
+class SOSAlertSerializer(serializers.ModelSerializer):
+    user = UserSerializer()
+    trip = TripSerializer()
+    driver = DriverProfileSerializer()
+    vehicle = VehicleSerializer()
+
+    class Meta:
+        model = SOSAlert
+        fields = ['id', 'user', 'trip', 'driver', 'vehicle', 'location',
+                  'destination', 'source', 'created_at', 'attended_to']
+
+
+class CreateSOSAlertSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SOSAlert
+        fields = ['trip', 'location', 'destination', 'source']
+
+    def create(self, validated_data):
+        validated_data['user'] = self.context['request'].user
+
+        # If trip is provided, automatically populate driver and vehicle
+        trip = validated_data.get('trip')
+        if trip:
+            validated_data['driver'] = trip.driver
+            validated_data['vehicle'] = trip.vehicle
+
         return super().create(validated_data)
