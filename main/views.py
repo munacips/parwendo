@@ -274,7 +274,7 @@ def get_and_respond(model, pk, serializer_class):
 
 def send_otp_to_user(user, code):
     email = getattr(user, 'email', None)
-    phone = getattr(user, 'phone_number', None)
+    phone = getattr(user, 'phone', None)
 
     if email:
         subject = "Your One-Time Password (OTP)"
@@ -646,7 +646,7 @@ def bookings(request):
         for token in fcm_tokens:
             send_push_notification(
                 token, "New Booking", "You have received a new booking from " + passenger.username, notification_data)
-        send_whatsapp_message(driver.phone_number, passenger.username,
+        send_whatsapp_message(driver.phone, passenger.username,
                               "You have received a new booking from " + passenger.username)
 
         return Response(booking_data, status=status.HTTP_201_CREATED)
@@ -678,7 +678,7 @@ def booking_details(request, id):
                         for token in fcm_tokens:
                             send_push_notification(
                                 token, "Booking Accepted", f"Your booking for the trip [{trip.start_location} -> {trip.destination}] has been accepted. Code: {code}", data)
-                        send_whatsapp_message(obj.passenger.phone_number, passenger.username,
+                        send_whatsapp_message(obj.passenger.phone, passenger.username,
                                               "Your booking for the trip [{trip.start_location} -> {trip.destination}] has been accepted. Code: {code}")
 
                         # Notify Driver
@@ -688,7 +688,7 @@ def booking_details(request, id):
                         for d_token in driver_tokens:
                             send_push_notification(
                                 d_token, "Booking Confirmed", f"Booking confirmed for {passenger.username}. Code: {code}", data)
-                        send_whatsapp_message(driver.phone_number, passenger.username,
+                        send_whatsapp_message(driver.phone, passenger.username,
                                               "Booking confirmed for {passenger.username}. Code: {code}")
 
                         return
@@ -696,7 +696,7 @@ def booking_details(request, id):
                         for token in fcm_tokens:
                             send_push_notification(
                                 token, "Booking Rejected", f"Your booking for the trip [{trip.start_location} -> {trip.destination}] has been rejected", data)
-                        send_whatsapp_message(obj.passenger.phone_number, passenger.username,
+                        send_whatsapp_message(obj.passenger.phone, passenger.username,
                                               "Your booking for the trip [{trip.start_location} -> {trip.destination}] has been rejected")
                         return
 
@@ -771,7 +771,7 @@ def chat_messages(request):
             if fcm_token:
                 send_push_notification(
                     fcm_token, "New Message", other_user + ' : ' + serializer.data['message'], data)
-        send_whatsapp_message(user.phone_number, other_user,
+        send_whatsapp_message(user.phone, other_user,
                               serializer.data['message'])
         print("Notification Sent!")
         return Response(serializer.data, status=status.HTTP_201_CREATED)
@@ -1074,7 +1074,7 @@ def zipit_payment_result(request):
                 send_push_notification(
                     token, "Payment Successful", "Your payment was successful!", data)
             send_whatsapp_message(
-                user.phone_number, user.username, "Your payment was successful!")
+                user.phone, user.username, "Your payment was successful!")
         except User.DoesNotExist:
             pass
 
