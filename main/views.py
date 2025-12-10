@@ -326,7 +326,14 @@ def send_push_notification(token, title, body, data=None):
         ),
         data=data
     )
-    response = messaging.send(message)
+    try:
+        response = messaging.send(message)
+    except messaging.UnregisteredError:
+        print(
+            f"Token {token} is invalid (UnregisteredError). Deleting from database.")
+        FCMDevice.objects.filter(token=token).delete()
+    except Exception as e:
+        print(f"Failed to send push notification to {token}: {e}")
 
 
 def send_whatsapp_message(to, name, message):
