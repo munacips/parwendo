@@ -828,7 +828,49 @@ def register_fcm_token(request):
 def sos_alerts(request):
     if request.method == 'GET':
         return apply_filter_and_respond(SOSAlert, SOSAlertFilter, SOSAlertSerializer, request)
-    return create_object(request, CreateSOSAlertSerializer)
+    data = request.data.copy()
+    serializer_class = CreateSOSAlertSerializer
+    serializer = serializer_class(
+        data=data, context={'request': request})
+    if serializer.is_valid():
+        sos_alert = serializer.save()
+
+        # Auto-populate fields based on user's active trip
+        user = request.user
+        active_trip = None
+
+        # 1. Check if user is a passenger in an active booking
+        # We look for confirmed bookings where the trip is ongoing or scheduled (recently started?)
+        # take the latest confirmed booking on an active trip.
+        active_booking = Booking.objects.filter(
+            passenger=user,
+            status='confirmed',
+            trip__status__in=['ongoing', 'scheduled']
+        ).order_by('-trip__start_time').first()
+
+        if active_booking:
+            active_trip = active_booking.trip
+
+        # 2. If not passenger, check if user is a driver of an active trip
+        if not active_trip and hasattr(user, 'driverprofile'):
+            active_trip = Trip.objects.filter(
+                driver=user.driverprofile,
+                status__in=['ongoing', 'scheduled']
+            ).order_by('-start_time').first()
+
+        if active_trip:
+            sos_alert.trip = active_trip
+            sos_alert.driver = active_trip.driver
+            sos_alert.vehicle = active_trip.vehicle
+            sos_alert.destination = active_trip.destination
+            sos_alert.source = active_trip.start_location
+            sos_alert.save()
+
+            # Re-serialize to include populated fields
+            return Response(SOSAlertSerializer(sos_alert).data, status=status.HTTP_201_CREATED)
+
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 @csrf_exempt

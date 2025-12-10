@@ -224,15 +224,8 @@ class SOSAlertSerializer(serializers.ModelSerializer):
 class CreateSOSAlertSerializer(serializers.ModelSerializer):
     class Meta:
         model = SOSAlert
-        fields = ['trip', 'location', 'destination', 'source']
+        fields = ['location']
 
     def create(self, validated_data):
         validated_data['user'] = self.context['request'].user
-
-        # If trip is provided, automatically populate driver and vehicle
-        trip = validated_data.get('trip')
-        if trip:
-            validated_data['driver'] = trip.driver
-            validated_data['vehicle'] = trip.vehicle
-
         return super().create(validated_data)

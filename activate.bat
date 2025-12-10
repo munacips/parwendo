@@ -1,0 +1,1 @@
+parwendo\scripts\activate
