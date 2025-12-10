@@ -688,7 +688,7 @@ def booking_details(request, id):
                         for d_token in driver_tokens:
                             send_push_notification(
                                 d_token, "Booking Confirmed", f"Booking confirmed for {passenger.username}. Code: {code}", data)
-                        send_whatsapp_message(driver.phone, passenger.username,
+                        send_whatsapp_message(driver_user.phone, passenger.username,
                                               "Booking confirmed for {passenger.username}. Code: {code}")
 
                         return
