@@ -329,6 +329,40 @@ def send_push_notification(token, title, body, data=None):
     response = messaging.send(message)
 
 
+def send_whatsapp_message(to, name, message):
+
+    # format to, add +263 if +263 is not there
+    if to:
+        to = to.strip()
+        if to.startswith("0"):
+            to = "+263" + to[1:]
+        elif to.startswith("263"):
+            to = "+" + to
+        elif not to.startswith("+"):
+            to = "+263" + to
+
+    token = os.getenv("WHATSAPP_TOKEN")
+    phone_number_id = os.getenv("WHATSAPP_PHONE_NUMBER_ID")
+    url = f"https://graph.facebook.com/v24.0/{phone_number_id}/messages"
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json"
+    }
+    data = {
+        "messaging_product": "whatsapp",
+        "recipient_type": "individual",
+        "to": to,
+        "type": "text",
+        "text": {
+            "preview_url": False,
+            "body": f"Hello {name}, {message}"
+        }
+    }
+
+    response = requests.post(url, json=data, headers=headers)
+    return response.json()
+
+
 cred = credentials.Certificate(
     os.path.join(BASE_DIR, 'parwendo-c278c-firebase-adminsdk-fbsvc-46354a366f.json'))
 firebase_admin.initialize_app(cred)
@@ -605,6 +639,8 @@ def bookings(request):
         for token in fcm_tokens:
             send_push_notification(
                 token, "New Booking", "You have received a new booking from " + passenger.username, notification_data)
+        send_whatsapp_message(driver.phone_number, passenger.username,
+                              "You have received a new booking from " + passenger.username)
 
         return Response(booking_data, status=status.HTTP_201_CREATED)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -635,6 +671,8 @@ def booking_details(request, id):
                         for token in fcm_tokens:
                             send_push_notification(
                                 token, "Booking Accepted", f"Your booking for the trip [{trip.start_location} -> {trip.destination}] has been accepted. Code: {code}", data)
+                        send_whatsapp_message(obj.passenger.phone_number, passenger.username,
+                                              "Your booking for the trip [{trip.start_location} -> {trip.destination}] has been accepted. Code: {code}")
 
                         # Notify Driver
                         driver_user = trip.driver.user
@@ -643,12 +681,16 @@ def booking_details(request, id):
                         for d_token in driver_tokens:
                             send_push_notification(
                                 d_token, "Booking Confirmed", f"Booking confirmed for {passenger.username}. Code: {code}", data)
+                        send_whatsapp_message(driver.phone_number, passenger.username,
+                                              "Booking confirmed for {passenger.username}. Code: {code}")
 
                         return
                     case 'rejected':
                         for token in fcm_tokens:
                             send_push_notification(
                                 token, "Booking Rejected", f"Your booking for the trip [{trip.start_location} -> {trip.destination}] has been rejected", data)
+                        send_whatsapp_message(obj.passenger.phone_number, passenger.username,
+                                              "Your booking for the trip [{trip.start_location} -> {trip.destination}] has been rejected")
                         return
 
             # Send notification to the passenger
@@ -722,6 +764,8 @@ def chat_messages(request):
             if fcm_token:
                 send_push_notification(
                     fcm_token, "New Message", other_user + ' : ' + serializer.data['message'], data)
+        send_whatsapp_message(user.phone_number, other_user,
+                              serializer.data['message'])
         print("Notification Sent!")
         return Response(serializer.data, status=status.HTTP_201_CREATED)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -1022,6 +1066,8 @@ def zipit_payment_result(request):
             for token in fcm_tokens:
                 send_push_notification(
                     token, "Payment Successful", "Your payment was successful!", data)
+            send_whatsapp_message(
+                user.phone_number, user.username, "Your payment was successful!")
         except User.DoesNotExist:
             pass
 
