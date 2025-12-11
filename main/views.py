@@ -5,7 +5,7 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework import status
 from .models import Company, PaymentTransaction, User, DriverProfile, FCMDevice, Vehicle, Trip, Booking, ChatThread, ChatMessage, UserReport, OTP, FCMDevice, Review, SOSAlert
-from .serializers import CompanySerializer, UserReportCreateSerializer, UserReportSerializer, ChatCreateMessageSerializer, CreateThreadSerializer, UserStatisticsSerializer, CreateVehicleSerializer, UserSerializer, TripCreateSerializer, BookingCreateSerializer, CreateDriverProfileSerializer, DriverProfileSerializer, VehicleSerializer, TripSerializer, BookingSerializer, ChatThreadSerializer, ChatMessageSerializer, ReviewSerializer, CreateReviewSerializer, SOSAlertSerializer, CreateSOSAlertSerializer
+from .serializers import CreateCompanySerializer, CompanySerializer, UserReportCreateSerializer, UserReportSerializer, ChatCreateMessageSerializer, CreateThreadSerializer, UserStatisticsSerializer, CreateVehicleSerializer, UserSerializer, TripCreateSerializer, BookingCreateSerializer, CreateDriverProfileSerializer, DriverProfileSerializer, VehicleSerializer, TripSerializer, BookingSerializer, ChatThreadSerializer, ChatMessageSerializer, ReviewSerializer, CreateReviewSerializer, SOSAlertSerializer, CreateSOSAlertSerializer
 import django_filters
 from rest_framework.pagination import PageNumberPagination
 import os
@@ -514,7 +514,7 @@ def vehicle_details(request, id):
 def companies(request):
     if request.method == 'GET':
         return apply_filter_and_respond(Company, CompanyFilter, CompanySerializer, request)
-    return create_object(request, CompanySerializer)
+    return create_object(request, CreateCompanySerializer)
 
 
 @csrf_exempt

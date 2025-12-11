@@ -64,10 +64,20 @@ class CreateVehicleSerializer(serializers.ModelSerializer):
 
 
 class CompanySerializer(serializers.ModelSerializer):
+    owner = UserSerializer()
 
     class Meta:
         model = Company
         fields = ['name', 'owner', 'created', 'updated']
+
+class CreateCompanySerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = Company
+        fields = ['name', 'owner', 'created', 'updated']
+
+    def create(self, validated_data):
+        validated_data['owner'] = self.context['request'].user
 
 
 class TripSerializer(serializers.ModelSerializer):
