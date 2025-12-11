@@ -4,8 +4,8 @@ from rest_framework.decorators import api_view, permission_classes, authenticati
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework import status
-from .models import PaymentTransaction, User, DriverProfile, FCMDevice, Vehicle, Trip, Booking, ChatThread, ChatMessage, UserReport, OTP, FCMDevice, Review, SOSAlert
-from .serializers import UserReportCreateSerializer, UserReportSerializer, ChatCreateMessageSerializer, CreateThreadSerializer, UserStatisticsSerializer, CreateVehicleSerializer, UserSerializer, TripCreateSerializer, BookingCreateSerializer, CreateDriverProfileSerializer, DriverProfileSerializer, VehicleSerializer, TripSerializer, BookingSerializer, ChatThreadSerializer, ChatMessageSerializer, ReviewSerializer, CreateReviewSerializer, SOSAlertSerializer, CreateSOSAlertSerializer
+from .models import Company, PaymentTransaction, User, DriverProfile, FCMDevice, Vehicle, Trip, Booking, ChatThread, ChatMessage, UserReport, OTP, FCMDevice, Review, SOSAlert
+from .serializers import CompanySerializer, UserReportCreateSerializer, UserReportSerializer, ChatCreateMessageSerializer, CreateThreadSerializer, UserStatisticsSerializer, CreateVehicleSerializer, UserSerializer, TripCreateSerializer, BookingCreateSerializer, CreateDriverProfileSerializer, DriverProfileSerializer, VehicleSerializer, TripSerializer, BookingSerializer, ChatThreadSerializer, ChatMessageSerializer, ReviewSerializer, CreateReviewSerializer, SOSAlertSerializer, CreateSOSAlertSerializer
 import django_filters
 from rest_framework.pagination import PageNumberPagination
 import os
@@ -155,6 +155,12 @@ class VehicleFilter(django_filters.FilterSet):
     class Meta:
         model = Vehicle
         fields = ['driver', 'vehicle_type', 'vehicle_make', 'vehicle_model']
+
+
+class CompanyFilter(django_filters.FilterSet):
+    class Meta:
+        model = Company
+        fields = ['name', 'owner']
 
 
 class UserFilter(django_filters.FilterSet):
@@ -500,6 +506,26 @@ def vehicle_details(request, id):
     elif request.method == 'PATCH':
         return update_object(request, Vehicle, id, VehicleSerializer)
     return delete_object(Vehicle, id)
+
+
+@csrf_exempt
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def companies(request):
+    if request.method == 'GET':
+        return apply_filter_and_respond(Company, CompanyFilter, CompanySerializer, request)
+    return create_object(request, CompanySerializer)
+
+
+@csrf_exempt
+@api_view(['GET', 'PATCH', 'DELETE'])
+@permission_classes([IsAuthenticated])
+def company_details(request, id):
+    if request.method == 'GET':
+        return get_and_respond(Company, id, CompanySerializer)
+    elif request.method == 'PATCH':
+        return update_object(request, Company, id, CompanySerializer)
+    return delete_object(Company, id)
 
 
 @csrf_exempt

@@ -29,9 +29,20 @@ class DriverProfile(models.Model):
         return f"{self.user.username} - {self.verification_status}"
 
 
+class Company(models.Model):
+    name = models.CharField(max_length=255)
+    owner = models.ForeignKey(User, on_delete=models.DO_NOTHING)
+    created = models.DateTimeField(auto_now_add=True)
+    updated = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.name + " by " + self.owner.username
+
+
 class Vehicle(models.Model):
     driver = models.ForeignKey(
-        DriverProfile, on_delete=models.CASCADE, related_name='vehicles')
+        DriverProfile, on_delete=models.CASCADE, related_name='vehicles',null=True,blank=True)
+    owner = models.ForeignKey(Company, on_delete=models.DO_NOTHING,null=True,blank=True)
     vehicle_number = models.CharField(max_length=20, unique=True)
     vehicle_type = models.CharField(max_length=20, choices=[(
         'car', 'Car'), ('bike', 'Bike'), ('truck', 'Truck')])

@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Booking, ChatMessage, ChatThread, DriverProfile, Trip, User, Vehicle, UserReport, Review, SOSAlert
+from .models import Company, Booking, ChatMessage, ChatThread, DriverProfile, Trip, User, Vehicle, UserReport, Review, SOSAlert
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -46,7 +46,7 @@ class VehicleSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Vehicle
-        fields = ['id', 'driver', 'vehicle_number', 'vehicle_type', 'vehicle_make',
+        fields = ['id', 'driver', 'owner', 'vehicle_number', 'vehicle_type', 'vehicle_make',
                   'vehicle_model', 'vehicle_color', 'vehicle_year', 'vehicle_capacity', 'vehicle_description', 'vehicle_picture']
 
 
@@ -55,12 +55,19 @@ class CreateVehicleSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Vehicle
-        fields = ['driver', 'vehicle_number', 'vehicle_type', 'vehicle_make',
+        fields = ['driver', 'owner', 'vehicle_number', 'vehicle_type', 'vehicle_make',
                   'vehicle_model', 'vehicle_color', 'vehicle_year', 'vehicle_capacity', 'vehicle_description', 'vehicle_registration_upload', 'insurance_upload', 'vehicle_picture']
 
     def create(self, validated_data):
         validated_data['driver'] = self.context['request'].user.driver_profile
         return super().create(validated_data)
+
+
+class CompanySerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = Company
+        fields = ['name', 'owner', 'created', 'updated']
 
 
 class TripSerializer(serializers.ModelSerializer):
