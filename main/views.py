@@ -154,7 +154,7 @@ class TripFilter(django_filters.FilterSet):
 class VehicleFilter(django_filters.FilterSet):
     class Meta:
         model = Vehicle
-        fields = ['driver', 'vehicle_type', 'vehicle_make', 'vehicle_model']
+        fields = ['driver', 'vehicle_type', 'vehicle_make', 'vehicle_model', 'owner']
 
 
 class CompanyFilter(django_filters.FilterSet):
