@@ -15,6 +15,8 @@ class User(AbstractUser):
 class DriverProfile(models.Model):
     user = models.OneToOneField(
         User, on_delete=models.CASCADE, related_name='driver_profile')
+    company = models.ForeignKey(
+        'Company', on_delete=models.SET_NULL, null=True, blank=True, related_name='drivers')
     license_number = models.CharField(max_length=20, unique=True)
     national_id_number = models.CharField(max_length=20, unique=True)
     license_upload = models.FileField(

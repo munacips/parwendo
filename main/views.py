@@ -173,7 +173,7 @@ class DriverProfileFilter(django_filters.FilterSet):
     class Meta:
         model = DriverProfile
         fields = ['user', 'license_number',
-                  'national_id_number', 'verification_status']
+                  'national_id_number', 'verification_status', 'company']
 
 
 class BookingFilter(django_filters.FilterSet):

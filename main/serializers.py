@@ -18,29 +18,6 @@ class UserSerializer(serializers.ModelSerializer):
         return user
 
 
-class DriverProfileSerializer(serializers.ModelSerializer):
-    user = UserSerializer()
-
-    class Meta:
-        model = DriverProfile
-        fields = ['id', 'user', 'license_number', 'national_id_number',
-                  'license_upload', 'license_upload_backside', 'national_id_upload', 'verification_status']
-
-
-class CreateDriverProfileSerializer(serializers.ModelSerializer):
-    user = serializers.PrimaryKeyRelatedField(read_only=True)
-
-    class Meta:
-        model = DriverProfile
-        fields = ['user', 'license_number', 'national_id_number',
-                  'license_upload', 'license_upload_backside', 'national_id_upload']
-
-    def create(self, validated_data):
-        # Ensure the user is set to the current user from context
-        validated_data['user'] = self.context['request'].user
-        return super().create(validated_data)
-
-
 class VehicleSerializer(serializers.ModelSerializer):
     driver = DriverProfileSerializer()
 
@@ -78,6 +55,30 @@ class CreateCompanySerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         validated_data['owner'] = self.context['request'].user
+
+
+class DriverProfileSerializer(serializers.ModelSerializer):
+    user = UserSerializer()
+    company = CompanySerializer()
+
+    class Meta:
+        model = DriverProfile
+        fields = ['id', 'user', 'company', 'license_number', 'national_id_number',
+                  'license_upload', 'license_upload_backside', 'national_id_upload', 'verification_status']
+
+
+class CreateDriverProfileSerializer(serializers.ModelSerializer):
+    user = serializers.PrimaryKeyRelatedField(read_only=True)
+
+    class Meta:
+        model = DriverProfile
+        fields = ['user', 'company', 'license_number', 'national_id_number',
+                  'license_upload', 'license_upload_backside', 'national_id_upload']
+
+    def create(self, validated_data):
+        # Ensure the user is set to the current user from context
+        validated_data['user'] = self.context['request'].user
+        return super().create(validated_data)
 
 
 class TripSerializer(serializers.ModelSerializer):
