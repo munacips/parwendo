@@ -18,14 +18,6 @@ class UserSerializer(serializers.ModelSerializer):
         return user
 
 
-class VehicleSerializer(serializers.ModelSerializer):
-    driver = DriverProfileSerializer()
-
-    class Meta:
-        model = Vehicle
-        fields = ['id', 'driver', 'owner', 'vehicle_number', 'vehicle_type', 'vehicle_make',
-                  'vehicle_model', 'vehicle_color', 'vehicle_year', 'vehicle_capacity', 'vehicle_description', 'vehicle_picture']
-
 
 class CreateVehicleSerializer(serializers.ModelSerializer):
     driver = serializers.PrimaryKeyRelatedField(read_only=True)
@@ -79,6 +71,15 @@ class CreateDriverProfileSerializer(serializers.ModelSerializer):
         # Ensure the user is set to the current user from context
         validated_data['user'] = self.context['request'].user
         return super().create(validated_data)
+
+
+class VehicleSerializer(serializers.ModelSerializer):
+    driver = DriverProfileSerializer()
+
+    class Meta:
+        model = Vehicle
+        fields = ['id', 'driver', 'owner', 'vehicle_number', 'vehicle_type', 'vehicle_make',
+                  'vehicle_model', 'vehicle_color', 'vehicle_year', 'vehicle_capacity', 'vehicle_description', 'vehicle_picture']
 
 
 class TripSerializer(serializers.ModelSerializer):
