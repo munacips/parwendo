@@ -888,16 +888,17 @@ def resend_otp(request):
 @permission_classes([IsAuthenticated])
 def register_fcm_token(request):
     token = request.data.get('token')
-    user_id = request.data.get('user_id')
-    user = User.objects.get(id=user_id)
+    
+    user = request.user 
+
     if token:
         FCMDevice.objects.update_or_create(
-            user=user,
-            defaults={'token': token}
+            token=token,
+            defaults={'user': user}
         )
         return Response({"message": "FCM token registered successfully"}, status=200)
+    
     return Response({"error": "Token is required"}, status=400)
-
 
 @csrf_exempt
 @api_view(['GET', 'POST'])
