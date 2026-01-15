@@ -1,0 +1,33 @@
+{% extends "admin/change_form.html" %}
+{% block admin_content_content %}
+    {{ block.super }}
+    <script>
+        let map, marker;
+
+        function initLiveTracking(tripId) {
+            document.getElementById('trip-map-container').style.display = 'block';
+            
+            // Poll the server every 5 seconds
+            setInterval(() => {
+                fetch(`/admin/get-trip-location/${tripId}/`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.status === 'success') {
+                            const pos = { lat: data.lat, lng: data.lng };
+                            
+                            if (!map) {
+                                map = new google.maps.Map(document.getElementById("live-map"), {
+                                    zoom: 15,
+                                    center: pos,
+                                });
+                                marker = new google.maps.Marker({ position: pos, map: map, title: data.username });
+                            } else {
+                                marker.setPosition(pos);
+                                map.panTo(pos);
+                            }
+                        }
+                    });
+            }, 5000);
+        }
+    </script>
+{% endblock %}

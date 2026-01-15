@@ -4,7 +4,7 @@ from rest_framework.decorators import api_view, permission_classes, authenticati
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework import status
-from .models import Company, PaymentTransaction, User, DriverProfile, FCMDevice, Vehicle, Trip, Booking, ChatThread, ChatMessage, UserReport, OTP, FCMDevice, Review, SOSAlert
+from .models import Company, PaymentTransaction, User, UserLocation, DriverProfile, FCMDevice, Vehicle, Trip, Booking, ChatThread, ChatMessage, UserReport, OTP, FCMDevice, Review, SOSAlert
 from .serializers import CreateCompanySerializer, CompanySerializer, UserReportCreateSerializer, UserReportSerializer, ChatCreateMessageSerializer, CreateThreadSerializer, UserStatisticsSerializer, CreateVehicleSerializer, UserSerializer, TripCreateSerializer, BookingCreateSerializer, CreateDriverProfileSerializer, DriverProfileSerializer, VehicleSerializer, TripSerializer, BookingSerializer, ChatThreadSerializer, ChatMessageSerializer, ReviewSerializer, CreateReviewSerializer, SOSAlertSerializer, CreateSOSAlertSerializer
 import django_filters
 from rest_framework.pagination import PageNumberPagination
@@ -20,7 +20,7 @@ from django.utils import timezone
 from datetime import timedelta
 import random
 from django.core.mail import send_mail
-from django.http import Http404, FileResponse
+from django.http import Http404, FileResponse, JsonResponse
 from django.conf import settings
 import firebase_admin
 from firebase_admin import credentials, messaging
@@ -28,7 +28,6 @@ from django.http import HttpRequest, JsonResponse, HttpResponseBadRequest, HttpR
 from oauth2_provider.views.base import TokenView
 import json
 from paynow import Paynow
-from django.contrib.auth import get_user_model
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -1186,6 +1185,36 @@ def initiate_payment(request):
     except Exception:
         pass
     return JsonResponse(result)
+
+@csrf_exempt
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_trip_live_location(request, trip_id):
+    trip = get_object_or_404(Trip, id=trip_id)
+    target_user = None
+
+    # 1. Try to get the Driver
+    driver_user = trip.driver.user
+    if UserLocation.objects.filter(user=driver_user).exists():
+        target_user = driver_user
+    else:
+        # 2. If no driver location, look for a confirmed passenger
+        confirmed_booking = trip.bookings.filter(status='confirmed').first()
+        if confirmed_booking:
+            target_user = confirmed_booking.passenger
+
+    if target_user and hasattr(target_user, 'userlocation'):
+        latitude = target_user.userlocation.latitude
+        longitude = target_user.userlocation.longitude
+        return JsonResponse({
+            'status': 'success',
+            'username': target_user.username,
+            'lat': latitude,
+            'lng': longitude,
+            'updated_at': target_user.userlocation.updated_at.strftime("%H:%M:%S")
+        })
+
+    return JsonResponse({'status': 'error', 'message': 'No active location found for driver or passengers.'})
 
 
 @csrf_exempt

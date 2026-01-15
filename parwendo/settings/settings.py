@@ -26,6 +26,8 @@ if not ALLOWED_HOSTS or ALLOWED_HOSTS == ['']:
 
 # Application definition
 INSTALLED_APPS = [
+    'daphne',
+    'channels',
     'corsheaders',
     'main',
     'django.contrib.admin',
@@ -71,6 +73,16 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'parwendo.wsgi.application'
+ASGI_APPLICATION = 'parwendo.asgi.application'
+
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "CONFIG": {
+            "hosts": [("127.0.0.1", 6379)],
+        },
+    },
+}
 
 # Database
 # Production database configuration

@@ -251,3 +251,13 @@ class SOSAlert(models.Model):
 
     def __str__(self):
         return f"SOS Alert by {self.user.username} at {self.created_at}"
+
+
+class UserLocation(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE)
+    latitude = models.DecimalField(max_digits=22, decimal_places=16, null=True, blank=True)
+    longitude = models.DecimalField(max_digits=22, decimal_places=16, null=True, blank=True) 
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.user.username} - {self.latitude}, {self.longitude}"

@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Company, Booking, ChatMessage, ChatThread, DriverProfile, Trip, User, Vehicle, UserReport, Review, SOSAlert
+from .models import Company, Booking, ChatMessage, ChatThread, DriverProfile, Trip, User, Vehicle, UserLocation, UserReport, Review, SOSAlert
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -248,3 +248,11 @@ class CreateSOSAlertSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         validated_data['user'] = self.context['request'].user
         return super().create(validated_data)
+
+
+class UserLocationSerializer(serializers.ModelSerializer):
+    user = UserSerializer()
+
+    class Meta:
+        model = UserLocation
+        fields = ['user', 'latitude', 'longitude', 'updated_at']

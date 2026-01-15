@@ -22,8 +22,7 @@ def send_push_notification(token, title, body, data=None):
     response = messaging.send(message)
 
 
-admin.site.register([Trip,
-                    Booking, ChatThread, ChatMessage, FCMDevice, Review, PaymentTransaction, SOSAlert])
+admin.site.register([Booking, ChatThread, ChatMessage, FCMDevice, Review, PaymentTransaction, SOSAlert])
 
 
 def get_file_preview(file_field, title):
@@ -312,6 +311,29 @@ class UserReportAdmin(admin.ModelAdmin):
                 return HttpResponseRedirect(".")
 
         return super().response_change(request, obj)
+
+
+@admin.register(Trip)
+class TripAdmin(admin.ModelAdmin):
+    list_display = ('id', 'driver', 'destination', 'status', 'view_location_button')
+    readonly_fields = ('live_location_map',)
+
+    def view_location_button(self, obj):
+        return format_html(
+            '<a class="button" onclick="initLiveTracking({})" style="cursor:pointer;">View Current Location</a>',
+            obj.id
+        )
+    view_location_button.short_description = "Live Tracking"
+
+    def live_location_map(self, obj):
+        # This creates the container for the Google Map
+        return format_html(
+            '<div id="trip-map-container" style="width:100%; height:400px; background:#eee; display:none; margin-top:20px;">'
+            '   <div id="live-map" style="width:100%; height:100%;"></div>'
+            '</div>'
+            '<script src="https://maps.googleapis.com/maps/api/js?key=GOOGLE_MAPS_API_KEY = AIzaSyBCdz9aQUY0Cgj9vq5E6bjPdUiOMSRR3_I"></script>'
+        )
+    live_location_map.short_description = "Live Map View"
 
 
 class LogEntryAdmin(admin.ModelAdmin):
