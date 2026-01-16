@@ -325,15 +325,14 @@ class TripAdmin(admin.ModelAdmin):
         )
     view_location_button.short_description = "Live Tracking"
 
+    #
     def live_location_map(self, obj):
-        # This creates the container for the Google Map
         return format_html(
             '<div id="trip-map-container" style="width:100%; height:400px; background:#eee; display:none; margin-top:20px;">'
             '   <div id="live-map" style="width:100%; height:100%;"></div>'
             '</div>'
-            '<script src="https://maps.googleapis.com/maps/api/js?key=GOOGLE_MAPS_API_KEY = AIzaSyBCdz9aQUY0Cgj9vq5E6bjPdUiOMSRR3_I"></script>'
+            '<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBCdz9aQUY0Cgj9vq5E6bjPdUiOMSRR3_I"></script>'
         )
-    live_location_map.short_description = "Live Map View"
 
 
 class LogEntryAdmin(admin.ModelAdmin):
