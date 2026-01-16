@@ -325,7 +325,6 @@ class TripAdmin(admin.ModelAdmin):
         )
     view_location_button.short_description = "Live Tracking"
 
-    #
     def live_location_map(self, obj):
         return format_html(
             '<div id="trip-map-container" style="width:100%; height:400px; background:#eee; display:none; margin-top:20px;">'

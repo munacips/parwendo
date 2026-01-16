@@ -23,14 +23,24 @@
                     .then(data => {
                         if (data.status === 'success') {
                             const pos = { lat: parseFloat(data.lat), lng: parseFloat(data.lng) };
-                            // ... rest of your map logic
+                            
+                            if (!map) {
+                                map = new google.maps.Map(document.getElementById("live-map"), {
+                                    zoom: 15,
+                                    center: pos,
+                                });
+                                marker = new google.maps.Marker({ position: pos, map: map, title: data.username });
+                            } else {
+                                marker.setPosition(pos);
+                                map.panTo(pos);
+                            }
                         }
                     })
-                    .catch(error => console.error('Error fetching location:', error));
+                    .catch(error => console.error('Error fetching location:', error));zz
             }, 5000);
         }
     </script>
     <div class="submit-row">
-        <input type="button" value="Start Live Tracking" class="default" onclick="initLiveTracking('{{ original.id }}')" />
+        <input type="submit" name="_start_live_tracking" value="Start Live Tracking" class="default" onclick="initLiveTracking('{{ original.id }}')" />
     </div>
 {% endblock %}
