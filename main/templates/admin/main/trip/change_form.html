@@ -40,7 +40,12 @@
             }, 5000);
         }
     </script>
+    
+{% endblock %}
+{% block submit_row %}
+{{ block.super }}
     <div class="submit-row">
         <input type="submit" name="_start_live_tracking" value="Start Live Tracking" class="default" onclick="initLiveTracking('{{ original.id }}')" />
     </div>
 {% endblock %}
+
