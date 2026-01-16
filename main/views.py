@@ -1,5 +1,6 @@
 from django.db.models import Count, Sum, Q
 from django.shortcuts import get_object_or_404, render
+from django.contrib.auth import get_user_model
 from rest_framework.decorators import api_view, permission_classes, authentication_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
@@ -1191,6 +1192,11 @@ def initiate_payment(request):
 @permission_classes([IsAuthenticated])
 def get_trip_live_location(request, trip_id):
     trip = get_object_or_404(Trip, id=trip_id)
+    
+    # Check if trip status is ongoing
+    if trip.status != 'ongoing':
+        return JsonResponse({'status': 'error', 'message': 'Trip is not ongoing.'})
+    
     target_user = None
 
     # 1. Try to get the Driver

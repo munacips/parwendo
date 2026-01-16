@@ -48,4 +48,5 @@ urlpatterns = [
          name="Paynow payment status"),
     path('sos_alerts/', views.sos_alerts, name='sos_alerts'),
     path('sos_alerts/<int:id>/', views.sos_alert_details, name='sos_alert_details'),
+    path('trips/<int:trip_id>/live-location/', views.get_trip_live_location, name='get_trip_live_location'),
 ]
