@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Company, Booking, ChatMessage, ChatThread, DriverProfile, Trip, User, Vehicle, UserLocation, UserReport, Review, SOSAlert
+from .models import PaymentTransaction, Company, Booking, ChatMessage, ChatThread, DriverProfile, Trip, User, Vehicle, UserLocation, UserReport, Review, SOSAlert
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -82,6 +82,13 @@ class VehicleSerializer(serializers.ModelSerializer):
                   'vehicle_model', 'vehicle_color', 'vehicle_year', 'vehicle_capacity', 'vehicle_description', 'vehicle_picture']
 
 
+class PaymentTransactionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PaymentTransaction
+        fields = ['id', 'user', 'amount', 'reference', 'email', 'method', 'phone', 'amount', 'poll_url', 'redirect_url',
+                  'status', 'created_at', 'updated_at']
+
+
 class TripSerializer(serializers.ModelSerializer):
     driver = DriverProfileSerializer()
     vehicle = VehicleSerializer()
@@ -89,17 +96,20 @@ class TripSerializer(serializers.ModelSerializer):
     vehicle_name = serializers.SerializerMethodField()
     vehicle_picture = serializers.ImageField(
         source='vehicle.vehicle_picture', read_only=True)
+    payment_transaction = PaymentTransactionSerializer()
+    
 
     class Meta:
         model = Trip
         fields = ['id', 'driver', 'destination', 'start_location', 'vehicle', 'vehicle_name', 'driver_name', 'start_time', 'estimated_end_time', 'available_seats',
-                  'price_per_seat', 'start_x_coordinates', 'start_y_coordinates', 'destination_x_coordinates', 'destination_y_coordinates', 'status', 'vehicle_picture']
+                  'price_per_seat', 'start_x_coordinates', 'start_y_coordinates', 'destination_x_coordinates', 'destination_y_coordinates', 'status', 'vehicle_picture', 'payment_transaction', 'paid_for']
 
     def get_driver_name(self, obj):
         return obj.driver.user.first_name + ' ' + obj.driver.user.last_name if obj.driver and obj.driver.user else None
 
     def get_vehicle_name(self, obj):
         return f"{obj.vehicle.vehicle_color} {obj.vehicle.vehicle_make} {obj.vehicle.vehicle_model} - {obj.vehicle.vehicle_number}" if obj.vehicle else None
+
 
 
 class TripCreateSerializer(serializers.ModelSerializer):

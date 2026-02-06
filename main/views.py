@@ -123,7 +123,7 @@ class TripFilter(django_filters.FilterSet):
         return queryset
 
     def filter_by_availability(self, queryset, name, value):
-        """Filter trips by availability (i.e., if there are available seats)"""
+        """Filter trips by availability (i.e., if there are available seats) and also paid for"""
         if value is True:
             # Get trips that have available seats (not fully booked)
             from django.db.models import Count, F
@@ -134,7 +134,8 @@ class TripFilter(django_filters.FilterSet):
                     bookings__status__in=['confirmed', 'pending']))
             ).filter(
                 booking_count__lt=F('available_seats'),
-                start_time__gt=timezone.now()
+                start_time__gt=timezone.now(),
+                paid_for=True
             )
         elif value is False:
             # Get trips that are fully booked
@@ -154,7 +155,8 @@ class TripFilter(django_filters.FilterSet):
 class VehicleFilter(django_filters.FilterSet):
     class Meta:
         model = Vehicle
-        fields = ['driver', 'vehicle_type', 'vehicle_make', 'vehicle_model', 'owner']
+        fields = ['driver', 'vehicle_type',
+                  'vehicle_make', 'vehicle_model', 'owner']
 
 
 class CompanyFilter(django_filters.FilterSet):
@@ -888,8 +890,8 @@ def resend_otp(request):
 @permission_classes([IsAuthenticated])
 def register_fcm_token(request):
     token = request.data.get('token')
-    
-    user = request.user 
+
+    user = request.user
 
     if token:
         FCMDevice.objects.update_or_create(
@@ -897,8 +899,9 @@ def register_fcm_token(request):
             defaults={'user': user}
         )
         return Response({"message": "FCM token registered successfully"}, status=200)
-    
+
     return Response({"error": "Token is required"}, status=400)
+
 
 @csrf_exempt
 @api_view(['GET', 'POST'])
@@ -1115,6 +1118,7 @@ def initiate_payment(request):
     """
     Expected POST JSON body:
     {
+    "trip_id": 1,
     "amount": 10.50,
     "method": "ecocash", # or "onemoney", "vmc", etc.
     "phone": "0777xxxxxx", # for mobile methods
@@ -1135,6 +1139,11 @@ def initiate_payment(request):
     description = payload.get("description") or "Payment"
 
     user = User.objects.get(id=request.user.id)
+
+    try:
+        trip = Trip.objects.get(id=payload.get("trip_id"))
+    except Trip.DoesNotExist:
+        return HttpResponseBadRequest("Invalid trip_id")
 
     if not (amount and method and reference and email):
         return HttpResponseBadRequest("Missing required fields")
@@ -1165,7 +1174,16 @@ def initiate_payment(request):
         redirect_url=response.redirect_url if hasattr(
             response, "redirect_url") else None,
     )
+    trip.payment_transaction = tx
+    trip.save()
     # Return details to frontend (ensure all fields are JSON serializable)
+
+    # Change paid = True if status is sent or paid
+    # if response.success == True:
+    #     tx.status = "paid"
+    #     tx.save()
+    #     trip.paid_for = True
+    #     trip.save()
 
     def safe_get(obj, attr, default=None):
         value = getattr(obj, attr, default)
@@ -1187,16 +1205,17 @@ def initiate_payment(request):
         pass
     return JsonResponse(result)
 
+
 @csrf_exempt
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def get_trip_live_location(request, trip_id):
     trip = get_object_or_404(Trip, id=trip_id)
-    
+
     # Check if trip status is ongoing
     if trip.status != 'ongoing':
         return JsonResponse({'status': 'error', 'message': 'Trip is not ongoing.'})
-    
+
     target_user = None
 
     # 1. Try to get the Driver
@@ -1255,12 +1274,29 @@ def payment_status(request):
 
     # Check status from Paynow
     status = PAYNOW.check_transaction_status(poll_url)
+    print("Status : ", status)
     # status will have properties like .paid, .status (string) etc.
     # You can inspect its docs or print status to see possible attributes
     if status.paid:
         tx.status = "paid"
+        tx.save()
+
+        # Find the related trip and mark as paid
+        try:
+            trip = Trip.objects.get(payment_transaction=tx)
+            trip.paid_for = True
+            trip.save()
+        except Trip.DoesNotExist:
+            return HttpResponseBadRequest("Related trip not found")
     else:
         tx.status = status.status or "unknown"
+        if tx.status == "sent":
+            try:
+                trip = Trip.objects.get(payment_transaction=tx)
+                trip.paid_for = True
+                trip.save()
+            except Trip.DoesNotExist:
+                return HttpResponseBadRequest("Related trip not found")
     tx.save()
 
     return JsonResponse({

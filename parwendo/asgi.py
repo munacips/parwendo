@@ -7,7 +7,7 @@ from channels.auth import AuthMiddlewareStack
 import main.routing 
 
 # Ensure this matches the exact path found in your original file
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'parwendo.settings.settings')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'parwendo.settings.dev')
 
 application = ProtocolTypeRouter({
     # Handles standard HTTP requests (REST API, Admin, etc.)

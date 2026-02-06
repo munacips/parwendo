@@ -87,6 +87,9 @@ class Trip(models.Model):
     price_per_seat = models.DecimalField(max_digits=10, decimal_places=2)
     status = models.CharField(max_length=20, choices=[(
         'scheduled', 'Scheduled'), ('ongoing', 'Ongoing'), ('completed', 'Completed'), ('cancelled', 'Cancelled')], default='scheduled')
+    paid_for = models.BooleanField(default=False)
+    payment_transaction = models.ForeignKey(
+        'PaymentTransaction', on_delete=models.SET_NULL, null=True, blank=True, related_name='trips')
 
     def __str__(self):
         return f"Trip {self.id} by {self.driver.user.username} to {self.destination}"

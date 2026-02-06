@@ -1,51 +1,121 @@
 {% extends "admin/change_form.html" %}
-{% block admin_content_content %}
-    {{ block.super }}
-    <script>
-        let map, marker;
+{% load static %}
 
-        // Inside change_form.html
-        function initLiveTracking(tripId) {
-            const container = document.getElementById('trip-map-container');
-            if (container) container.style.display = 'block';
-
-            if (typeof google === 'undefined') {
-                alert("Google Maps library not loaded. Check your API key and connection.");
-                return;
-            }
-
-            setInterval(() => {
-                fetch(`/trips/${tripId}/live-location/`) // Ensure this URL exists in urls.py!
-                    .then(response => {
-                        if (!response.ok) throw new Error('Network response was not ok');
-                        return response.json();
-                    })
-                    .then(data => {
-                        if (data.status === 'success') {
-                            const pos = { lat: parseFloat(data.lat), lng: parseFloat(data.lng) };
-                            
-                            if (!map) {
-                                map = new google.maps.Map(document.getElementById("live-map"), {
-                                    zoom: 15,
-                                    center: pos,
-                                });
-                                marker = new google.maps.Marker({ position: pos, map: map, title: data.username });
-                            } else {
-                                marker.setPosition(pos);
-                                map.panTo(pos);
-                            }
-                        }
-                    })
-                    .catch(error => console.error('Error fetching location:', error));zz
-            }, 5000);
-        }
-    </script>
-    
-{% endblock %}
-{% block submit_buttons_bottom %}
+{% block extrahead %}
 {{ block.super }}
-    <div class="submit-row">
-        <input type="submit" name="_start_live_tracking" value="Start Live Tracking" class="default" onclick="initLiveTracking('{{ original.id }}')" />
-    </div>
+<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBCdz9aQUY0Cgj9vq5E6bjPdUiOMSRR3_I"></script>
+<script src="{% static 'admin/main/trip/live_tracking.js' %}"></script>
+<style>
+    #trip-map-container {
+        width: 100%;
+        margin: 20px 0 0 0;
+        padding: 20px;
+        background: linear-gradient(135deg, #f5f5f5 0%, #e8f4f8 100%);
+        border-radius: 8px;
+        display: none;
+        border: 2px solid #0066cc;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+
+    #live-map {
+        width: 100%;
+        height: 450px;
+        border: 2px solid #ddd;
+        border-radius: 6px;
+        margin-top: 15px;
+    }
+
+    .tracking-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 15px;
+    }
+
+    .tracking-header h2 {
+        margin: 0;
+        font-size: 20px;
+        color: #333;
+        font-weight: 600;
+    }
+
+    .tracking-status {
+        display: inline-block;
+        padding: 5px 12px;
+        background: #28a745;
+        color: white;
+        border-radius: 4px;
+        font-size: 12px;
+        font-weight: bold;
+        margin-left: 10px;
+    }
+
+    .tracking-info {
+        padding: 10px;
+        background: #e8f4f8;
+        border-radius: 4px;
+        margin-bottom: 10px;
+        font-size: 13px;
+        color: #333;
+    }
+
+    .tracking-info strong {
+        color: #0066cc;
+    }
+
+    .stop-tracking-btn {
+        padding: 10px 20px;
+        background: #dc3545;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-weight: bold;
+        transition: all 0.3s ease;
+    }
+
+    .stop-tracking-btn:hover {
+        background: #c82333;
+        transform: scale(1.05);
+    }
+
+    .start-tracking-btn {
+        padding: 10px 20px;
+        background: #0066cc;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-weight: bold;
+        transition: all 0.3s ease;
+    }
+
+    .start-tracking-btn:hover {
+        background: #0052a3;
+        transform: scale(1.05);
+    }
+</style>
 {% endblock %}
 
+{% block submit_buttons_bottom %}
+<div id="trip-map-container">
+    <div class="tracking-header">
+        <div>
+            <h2>📍 Live Location Tracking</h2>
+            <span class="tracking-status" id="connection-status">Initializing...</span>
+        </div>
+        <button type="button" class="stop-tracking-btn" onclick="stopLiveTracking()">🔴 Stop Tracking</button>
+    </div>
+    <div class="tracking-info" id="tracking-info-display">
+        Connecting to location service...
+    </div>
+    <div id="live-map"></div>
+</div>
+
+{{ block.super }}
+
+<div class="submit-row">
+    <button type="button" class="start-tracking-btn" onclick="initLiveTracking('{{ original.id }}')">📍 Start Live
+        Tracking</button>
+</div>
+{% endblock %}

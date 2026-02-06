@@ -1,4 +1,5 @@
 from django.contrib import admin
+import requests
 from .models import User, DriverProfile, Vehicle, Trip, Booking, ChatThread, ChatMessage, UserReport, FCMDevice, Review, PaymentTransaction, SOSAlert
 from django.http import HttpResponseRedirect
 from django.contrib import messages
@@ -20,6 +21,39 @@ def send_push_notification(token, title, body, data=None):
 
     )
     response = messaging.send(message)
+
+def send_whatsapp_message(to, name, message):
+
+    # format to, add +263 if +263 is not there
+    if to:
+        to = to.strip()
+        if to.startswith("0"):
+            to = "+263" + to[1:]
+        elif to.startswith("263"):
+            to = "+" + to
+        elif not to.startswith("+"):
+            to = "+263" + to
+
+    token = os.getenv("WHATSAPP_TOKEN")
+    phone_number_id = os.getenv("WHATSAPP_PHONE_NUMBER_ID")
+    url = f"https://graph.facebook.com/v24.0/{phone_number_id}/messages"
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json"
+    }
+    data = {
+        "messaging_product": "whatsapp",
+        "recipient_type": "individual",
+        "to": to,
+        "type": "text",
+        "text": {
+            "preview_url": False,
+            "body": f"Hello {name}, {message}"
+        }
+    }
+
+    response = requests.post(url, json=data, headers=headers)
+    return response.json()
 
 
 admin.site.register([Booking, ChatThread, ChatMessage, FCMDevice, Review, PaymentTransaction, SOSAlert])
@@ -161,6 +195,7 @@ class VehicleAdmin(admin.ModelAdmin):
             for token in fcm_tokens:
                 send_push_notification(
                     token, "Vehicle Verified", f"You vehicle [{str(obj)}] has been verified.", data)
+            send_whatsapp_message(driver.phone_number, driver.first_name, f"Your vehicle [{str(obj)}] has been verified and is now active on our platform.")
 
             self.message_user(
                 request, "Vehicle marked as verified.", messages.SUCCESS)
@@ -198,6 +233,7 @@ class DriverProfileAdmin(admin.ModelAdmin):
             for token in fcm_tokens:
                 send_push_notification(
                     token, "Account Verified", f"Your driver profile has been verified.", data)
+            send_whatsapp_message(driver.phone_number, driver.first_name, "Your driver profile has been verified and is now active on our platform.")
 
             self.message_user(
                 request, "Driver profile marked as verified.", messages.SUCCESS)
@@ -218,6 +254,7 @@ class DriverProfileAdmin(admin.ModelAdmin):
             for token in fcm_tokens:
                 send_push_notification(
                     token, "Account Rejected", f"You driver profile has been rejected.", data)
+            send_whatsapp_message(driver.phone_number, driver.first_name, "Your driver profile has been rejected. Please contact support for more information.")
 
             self.message_user(
                 request, "Driver profile marked as rejected.", messages.WARNING)
@@ -315,23 +352,11 @@ class UserReportAdmin(admin.ModelAdmin):
 
 @admin.register(Trip)
 class TripAdmin(admin.ModelAdmin):
-    list_display = ('id', 'driver', 'destination', 'status', 'view_location_button')
-    readonly_fields = ('live_location_map',)
+    change_form_template = "admin/main/trip/change_form.html"
+    list_display = ('id', 'driver', 'destination', 'status')
 
-    def view_location_button(self, obj):
-        return format_html(
-            '<a class="button" onclick="initLiveTracking({})" style="cursor:pointer;">View Current Location</a>',
-            obj.id
-        )
-    view_location_button.short_description = "Live Tracking"
-
-    def live_location_map(self, obj):
-        return format_html(
-            '<div id="trip-map-container" style="width:100%; height:400px; background:#eee; display:none; margin-top:20px;">'
-            '   <div id="live-map" style="width:100%; height:100%;"></div>'
-            '</div>'
-            '<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBCdz9aQUY0Cgj9vq5E6bjPdUiOMSRR3_I"></script>'
-        )
+    class Media:
+        js = ('admin/main/trip/live_tracking.js',)
 
 
 class LogEntryAdmin(admin.ModelAdmin):
